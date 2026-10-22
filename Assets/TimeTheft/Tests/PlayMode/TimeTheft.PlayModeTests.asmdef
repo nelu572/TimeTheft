@@ -1,0 +1,6 @@
+{
+  "name": "TimeTheft.PlayModeTests",
+  "references": ["TimeTheft.Runtime", "Unity.TextMeshPro", "Unity.ugui", "Unity.InputSystem", "Unity.InputSystem.TestFramework"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
