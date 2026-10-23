@@ -9,6 +9,14 @@ namespace TimeTheft
     public sealed class TabletopGameController : MonoBehaviour
     {
         [SerializeField] private PrototypeSettings settings;
+        [Header("결과 관찰 시간 · 월드 플레이 전용 (초)")]
+        [SerializeField, Min(.05f)] private float actionReadDuration = 1.25f;
+        [SerializeField, Min(.05f)] private float exchangeVerdictDuration = .5f;
+        [SerializeField, Min(.05f)] private float exchangeDuration = .7f;
+        [SerializeField, Min(.05f)] private float finalValueDuration = 1f;
+        [SerializeField, Min(.05f)] private float timeTransferDuration = 1.1f;
+        [SerializeField, Min(.05f)] private float resultHoldDuration = 1.5f;
+        [SerializeField, Min(.05f)] private float roundCloseDuration = .22f;
         private TabletopGameView view;
         private bool skipRequested;
         public TimeTheftMatch Match { get; private set; }
@@ -45,9 +53,7 @@ namespace TimeTheft
         public void SelectClock(int index)
         {
             if (!isActiveAndEnabled || Match == null || !Match.SelectClock(index)) return;
-            // 규칙은 즉시 확정하며 카메라 완료를 게임 진행 조건으로 삼지 않는다.
-            view.FocusCamera.Focus(view.Clocks[index].FocusTarget);
-            StartCoroutine(Allocate());
+            StartCoroutine(Allocate(index, true));
         }
 
         public void ChooseAction(ClockAction action)
@@ -67,15 +73,38 @@ namespace TimeTheft
         {
             if (!Match.BeginRound()) yield break;
             view.PrepareDeal(Match.Round);
-            yield return Pause(settings.MoveDuration);
+            yield return Animate(settings.MoveDuration, view.DealFrame);
             Match.OpenSelection();
-            view.OpenSelection();
+            view.OpenSelection(Match);
+            if (Match.Stage == RoundStage.SelectingAi) yield return SelectAi();
         }
 
-        private IEnumerator Allocate()
+        private IEnumerator SelectAi()
         {
-            view.Allocate(Match);
-            yield return Pause(settings.MoveDuration);
+            view.OpenSelection(Match);
+            yield return Pause(view.AiSelectionPause);
+            if (!Match.SelectAiClock()) yield break;
+            yield return Allocate(Match.AiClock, false);
+        }
+
+        private IEnumerator Allocate(int index, bool player)
+        {
+            // 소유권은 즉시 확정하되, 다른 선택은 물건이 도착한 뒤 연다. 카메라 완료와는 독립이다.
+            view.BeginAllocation(index, player);
+            yield return Animate(view.AllocationDuration, view.AllocationFrame);
+            Match.CompleteAllocation();
+            if (Match.Stage == RoundStage.SelectingAi)
+            {
+                yield return SelectAi();
+                yield break;
+            }
+            if (Match.Stage == RoundStage.Selecting)
+            {
+                view.OpenSelection(Match);
+                yield break;
+            }
+            view.BeginDiscard(Match.DiscardedClock);
+            yield return Animate(view.AllocationDuration, view.AllocationFrame);
             view.RevealPlayer(Match);
             yield return Pause(settings.RevealDuration * .7f);
             Match.OpenDecision();
@@ -86,28 +115,37 @@ namespace TimeTheft
         {
             int oldPlayer = Match.PlayerClock, oldAi = Match.AiClock;
             view.RevealActions(Match);
-            yield return Pause(settings.RevealDuration);
+            yield return Pause(actionReadDuration);
+            view.ShowExchangeVerdict(Match);
+            yield return Pause(exchangeVerdictDuration);
             Match.ResolveExchange();
             view.Exchange(Match, oldPlayer, oldAi);
-            yield return Animate(settings.MoveDuration * (Match.DidExchange ? 1.5f : 1), view.ExchangeFrame);
+            if (Match.DidExchange) yield return Animate(exchangeDuration, view.ExchangeFrame);
             view.RevealFinal(Match);
-            yield return Pause(settings.RevealDuration * .65f);
+            yield return Pause(finalValueDuration);
             Match.Settle();
             view.Settle(Match);
-            yield return Animate(settings.SettlementDuration, view.NumbersFrame);
+            yield return Animate(timeTransferDuration, view.NumbersFrame);
             // 기존 프로토타입과 같이 0h 및 차감액을 보여준 뒤 판돈을 지급한다.
-            yield return Pause(settings.RoundPause);
+            view.HoldRoundResult();
+            yield return Pause(resultHoldDuration);
             Match.FinishRound();
             if (Match.Stage == RoundStage.GameOver)
             {
                 if (Match.Winner != MatchWinner.Draw)
                 {
+                    view.ShowAward(Match);
                     view.BeginNumberChange(Match);
-                    yield return Animate(settings.SettlementDuration, view.NumbersFrame);
+                    yield return Animate(timeTransferDuration, view.NumbersFrame);
                 }
                 view.Result(Match);
             }
-            else yield return Deal();
+            else
+            {
+                view.CloseRound();
+                yield return Animate(roundCloseDuration, view.RoundCloseFrame);
+                yield return Deal();
+            }
         }
 
         private IEnumerator Pause(float duration) => Animate(duration, null);

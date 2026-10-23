@@ -92,8 +92,72 @@ namespace TimeTheft.Tests
                 Assert.That(match.OpenSelection(), Is.True);
                 Assert.That(match.SelectClock(player), Is.True);
                 Assert.That(match.PlayerClock, Is.EqualTo(player));
+                Assert.That(match.AiClock, Is.EqualTo(-1));
+                Assert.That(match.DiscardedClock, Is.EqualTo(-1));
+                Assert.That(match.CompleteAllocation(), Is.True);
+                Assert.That(match.SelectAiClock(), Is.True);
+                Assert.That(match.CompleteAllocation(), Is.True);
                 CollectionAssert.AreEquivalent(new[] { 0, 1, 2 },
                     new[] { match.PlayerClock, match.AiClock, match.DiscardedClock });
+            }
+        }
+
+        [Test]
+        public void FirstSelectionLocksUntilAllocatedAndInitiativeAlternatesEveryRound()
+        {
+            var match = new TimeTheftMatch(new PrototypeRules { InitialLife = 30, MinimumValue = 1, MaximumValue = 1 },
+                new Random(481));
+            for (int round = 1; round <= 3; round++)
+            {
+                Assert.That(match.BeginRound(), Is.True);
+                Assert.That(match.PlayerSelectsFirst, Is.EqualTo(round % 2 == 1), "최초 플레이어 선공은 임시 정책");
+                Assert.That(match.DiscardedClock, Is.EqualTo(-1));
+                Assert.That(match.OpenSelection(), Is.True);
+                if (match.PlayerSelectsFirst)
+                {
+                    Assert.That(match.Stage, Is.EqualTo(RoundStage.Selecting));
+                    for (int i = 0; i < 3; i++) Assert.That(match.CanSelectClock(i), Is.True);
+                    RejectWithoutMutation(match, () => match.SelectAiClock());
+                    Assert.That(match.SelectClock(2), Is.True);
+                    Assert.That(match.AiClock, Is.EqualTo(-1));
+                }
+                else
+                {
+                    Assert.That(match.Stage, Is.EqualTo(RoundStage.SelectingAi));
+                    RejectWithoutMutation(match, () => match.SelectClock(0));
+                    Assert.That(match.SelectAiClock(), Is.True);
+                    Assert.That(match.PlayerClock, Is.EqualTo(-1));
+                }
+                Assert.That(match.Stage, Is.EqualTo(RoundStage.Allocating));
+                Assert.That(match.DiscardedClock, Is.EqualTo(-1));
+                for (int i = 0; i < 3; i++) Assert.That(match.CanSelectClock(i), Is.False);
+                RejectWithoutMutation(match, () => match.SelectClock(0));
+                RejectWithoutMutation(match, () => match.SelectAiClock());
+                RejectWithoutMutation(match, () => match.OpenDecision());
+                Assert.That(match.CompleteAllocation(), Is.True);
+                if (match.PlayerSelectsFirst)
+                {
+                    Assert.That(match.Stage, Is.EqualTo(RoundStage.SelectingAi));
+                    Assert.That(match.SelectAiClock(), Is.True);
+                }
+                else
+                {
+                    Assert.That(match.Stage, Is.EqualTo(RoundStage.Selecting));
+                    int remaining = 0;
+                    for (int i = 0; i < 3; i++) if (match.CanSelectClock(i)) remaining++;
+                    Assert.That(remaining, Is.EqualTo(2));
+                    RejectWithoutMutation(match, () => match.SelectClock(match.AiClock));
+                    Assert.That(match.SelectClock((match.AiClock + 1) % 3), Is.True);
+                }
+                Assert.That(match.Stage, Is.EqualTo(RoundStage.Allocating));
+                RejectWithoutMutation(match, () => match.OpenDecision());
+                Assert.That(match.CompleteAllocation(), Is.True);
+                Assert.That(match.Stage, Is.EqualTo(RoundStage.Inspecting));
+                CollectionAssert.AreEquivalent(new[] { 0, 1, 2 },
+                    new[] { match.PlayerClock, match.AiClock, match.DiscardedClock });
+                Assert.That(match.OpenDecision(), Is.True);
+                Settle(match, ClockAction.Keep);
+                Assert.That(match.FinishRound(), Is.True);
             }
         }
 
@@ -141,6 +205,8 @@ namespace TimeTheft.Tests
             var match = new TimeTheftMatch(new PrototypeRules(), new Random(481));
             RejectWithoutMutation(match, () => match.OpenSelection());
             RejectWithoutMutation(match, () => match.SelectClock(0));
+            RejectWithoutMutation(match, () => match.SelectAiClock());
+            RejectWithoutMutation(match, () => match.CompleteAllocation());
             RejectWithoutMutation(match, () => match.OpenDecision());
             RejectWithoutMutation(match, () => match.CommitAction(ClockAction.Keep));
             RejectWithoutMutation(match, () => match.ResolveExchange());
@@ -156,6 +222,15 @@ namespace TimeTheft.Tests
             RejectWithoutMutation(match, () => match.SelectClock(3));
             Assert.That(match.SelectClock(2), Is.True);
             RejectWithoutMutation(match, () => match.SelectClock(1));
+            RejectWithoutMutation(match, () => match.SelectAiClock());
+            RejectWithoutMutation(match, () => match.OpenDecision());
+            Assert.That(match.CompleteAllocation(), Is.True);
+            RejectWithoutMutation(match, () => match.CompleteAllocation());
+            Assert.That(match.SelectAiClock(), Is.True);
+            RejectWithoutMutation(match, () => match.SelectAiClock());
+            RejectWithoutMutation(match, () => match.OpenDecision());
+            Assert.That(match.CompleteAllocation(), Is.True);
+            RejectWithoutMutation(match, () => match.CompleteAllocation());
             RejectWithoutMutation(match, () => match.CommitAction(ClockAction.Swap));
             Assert.That(match.OpenDecision(), Is.True);
             RejectWithoutMutation(match, () => match.OpenDecision());
@@ -187,7 +262,7 @@ namespace TimeTheft.Tests
                     Assert.That(match.Round, Is.LessThan(rules.InitialLife), "seed " + seed);
                     Assert.That(match.BeginRound(), Is.True);
                     Assert.That(match.OpenSelection(), Is.True);
-                    Assert.That(match.SelectClock(match.Round % 3), Is.True);
+                    AllocateClocks(match, match.Round % 3);
                     Assert.That(match.OpenDecision(), Is.True);
                     Settle(match, match.Round % 2 == 0 ? ClockAction.Keep : ClockAction.Swap);
                     Assert.That(match.PlayerLife, Is.InRange(0, lastPlayerLife - 1));
@@ -271,7 +346,7 @@ namespace TimeTheft.Tests
                 new ScriptedRandom(new[] { playerValue, aiValue, discardedValue }, 0, draw ?? 0.5));
             Assert.That(match.BeginRound(), Is.True);
             Assert.That(match.OpenSelection(), Is.True);
-            Assert.That(match.SelectClock(0), Is.True);
+            AllocateClocks(match, 0);
             Assert.That(match.OpenDecision(), Is.True);
             return match;
         }
@@ -287,10 +362,28 @@ namespace TimeTheft.Tests
         {
             Assert.That(match.BeginRound(), Is.True);
             Assert.That(match.OpenSelection(), Is.True);
-            Assert.That(match.SelectClock(selectedIndex), Is.True);
+            AllocateClocks(match, selectedIndex);
             Assert.That(match.OpenDecision(), Is.True);
             Settle(match, action);
             Assert.That(match.FinishRound(), Is.True);
+        }
+
+        private static void AllocateClocks(TimeTheftMatch match, int preferredIndex)
+        {
+            if (match.Stage == RoundStage.SelectingAi)
+            {
+                Assert.That(match.SelectAiClock(), Is.True);
+                Assert.That(match.CompleteAllocation(), Is.True);
+            }
+            int index = match.CanSelectClock(preferredIndex) ? preferredIndex : (preferredIndex + 1) % 3;
+            Assert.That(match.SelectClock(index), Is.True);
+            Assert.That(match.CompleteAllocation(), Is.True);
+            if (match.Stage == RoundStage.SelectingAi)
+            {
+                Assert.That(match.SelectAiClock(), Is.True);
+                Assert.That(match.CompleteAllocation(), Is.True);
+            }
+            Assert.That(match.Stage, Is.EqualTo(RoundStage.Inspecting));
         }
 
         private static void RejectWithoutMutation(TimeTheftMatch match, Func<bool> operation)

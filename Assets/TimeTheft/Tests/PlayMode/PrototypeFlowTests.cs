@@ -34,14 +34,16 @@ namespace TimeTheft.Tests
                 {
                     Assert.That(++rounds, Is.LessThanOrEqualTo(30));
                     Assert.That(controller.View.Clocks, Has.Length.EqualTo(3));
-                    foreach (var watch in controller.View.Clocks)
+                    for (int i = 0; i < controller.View.Clocks.Length; i++)
                     {
-                        Assert.That(watch.Button.interactable, Is.True);
+                        var watch = controller.View.Clocks[i];
+                        Assert.That(watch.Button.interactable, Is.EqualTo(controller.Match.CanSelectClock(i)));
                         Assert.That(ValueText(watch), Is.EqualTo("?"));
                         Assert.That(watch.Group.alpha, Is.EqualTo(1).Within(.001));
                         Assert.That(Quaternion.Angle(watch.Rect.localRotation, Quaternion.identity), Is.LessThan(.01));
                     }
                     int selection = (rounds + game) % 3;
+                    if (!controller.Match.CanSelectClock(selection)) selection = (selection + 1) % 3;
                     Click(controller.View.Clocks[selection].gameObject);
                     int selectedAi = controller.Match.AiClock;
                     // 더블클릭과 연타는 상태를 바꾸지 않는다.
@@ -53,6 +55,10 @@ namespace TimeTheft.Tests
                     Assert.That(ValueText(controller.View.Clocks[controller.Match.AiClock]), Is.EqualTo("?"));
                     Assert.That(ValueText(controller.View.Clocks[controller.Match.DiscardedClock]), Is.EqualTo("?"));
                     Assert.That(controller.View.Clocks[controller.Match.DiscardedClock].Group.alpha, Is.Zero);
+                    Assert.That(Vector2.Distance(controller.View.Clocks[controller.Match.PlayerClock].Rect.anchoredPosition,
+                        controller.View.PlayerPosition), Is.LessThan(.01));
+                    Assert.That(Vector2.Distance(controller.View.Clocks[controller.Match.AiClock].Rect.anchoredPosition,
+                        controller.View.AiPosition), Is.LessThan(.01));
                     Assert.That(controller.View.Keep.gameObject.activeSelf, Is.True);
                     int beforePlayer = controller.Match.PlayerLife;
                     int beforeAi = controller.Match.AiLife;
@@ -167,6 +173,37 @@ namespace TimeTheft.Tests
                 Assert.That(controller.Match.Pot, Is.Zero);
                 Assert.That(Object.FindObjectsByType<EventSystem>(FindObjectsSortMode.None), Has.Length.EqualTo(1));
             }
+        }
+
+        [UnityTest]
+        public IEnumerator AiFirstRoundLeavesOnlyTwoPlayerChoicesAndKeepsTakenClockPrivate()
+        {
+            Click(controller.View.Clocks[0].gameObject);
+            yield return WaitFor(RoundStage.Deciding);
+            Click(controller.View.Keep.gameObject);
+            yield return WaitFor(RoundStage.Selecting);
+            Assert.That(controller.Match.Round, Is.EqualTo(2));
+            Assert.That(controller.Match.PlayerSelectsFirst, Is.False);
+            int ai = controller.Match.AiClock;
+            Assert.That(ai, Is.InRange(0, 2));
+            Assert.That(controller.Match.PlayerClock, Is.EqualTo(-1));
+            Assert.That(controller.Match.DiscardedClock, Is.EqualTo(-1));
+            int choices = 0;
+            for (int i = 0; i < 3; i++)
+            {
+                Assert.That(ValueText(controller.View.Clocks[i]), Is.EqualTo("?"));
+                Assert.That(controller.View.Clocks[i].Button.interactable, Is.EqualTo(i != ai));
+                if (controller.View.Clocks[i].Button.interactable) choices++;
+            }
+            Assert.That(choices, Is.EqualTo(2));
+            Assert.That(Vector2.Distance(controller.View.Clocks[ai].Rect.anchoredPosition,
+                controller.View.AiPosition), Is.LessThan(.01));
+            controller.SelectClock(ai);
+            Assert.That(controller.Match.Stage, Is.EqualTo(RoundStage.Selecting));
+            Assert.That(controller.Match.PlayerClock, Is.EqualTo(-1));
+            Click(controller.View.Clocks[(ai + 1) % 3].gameObject);
+            yield return WaitFor(RoundStage.Deciding);
+            Assert.That(controller.Match.AiClock, Is.EqualTo(ai));
         }
 
         private IEnumerator WaitFor(RoundStage target)

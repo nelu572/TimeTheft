@@ -1,6 +1,6 @@
 {
   "name": "TimeTheft.EditModeTests",
-  "references": ["TimeTheft.Runtime", "Unity.TextMeshPro"],
+  "references": ["TimeTheft.Runtime", "Unity.TextMeshPro", "Unity.ugui", "Unity.InputSystem"],
   "includePlatforms": ["Editor"],
   "optionalUnityReferences": ["TestAssemblies"],
   "autoReferenced": false

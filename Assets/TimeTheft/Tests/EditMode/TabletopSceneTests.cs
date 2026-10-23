@@ -6,6 +6,9 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
+using UnityEngine.UI;
 
 namespace TimeTheft.Tests
 {
@@ -143,16 +146,45 @@ namespace TimeTheft.Tests
         }
 
         [Test]
-        public void PlaySceneUsesThreeReusableClocksAndReadableWorldControls()
+        public void PlaySceneUsesThreeReusableClocksAndOneCompactDecisionOverlay()
         {
             var scene = EditorSceneManager.OpenPreviewScene("Assets/Scenes/TabletopGame.unity");
             try
             {
                 var roots = scene.GetRootGameObjects();
                 Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<PrototypeController>(true)), Is.Empty);
-                Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<Canvas>(true)), Is.Empty);
+                var canvases = roots.SelectMany(r => r.GetComponentsInChildren<Canvas>(true)).ToArray();
+                Assert.That(canvases, Has.Length.EqualTo(1));
+                Assert.That(canvases[0].renderMode, Is.EqualTo(RenderMode.ScreenSpaceOverlay));
+                var scaler = canvases[0].GetComponent<CanvasScaler>();
+                Assert.That(scaler, Is.Not.Null);
+                Assert.That(scaler.uiScaleMode, Is.EqualTo(CanvasScaler.ScaleMode.ScaleWithScreenSize));
+                Assert.That(scaler.referenceResolution, Is.EqualTo(new Vector2(1920, 1080)));
+                Assert.That(canvases[0].GetComponent<GraphicRaycaster>(), Is.Not.Null);
+                var eventSystems = roots.SelectMany(r => r.GetComponentsInChildren<EventSystem>(true)).ToArray();
+                Assert.That(eventSystems, Has.Length.EqualTo(1));
+                Assert.That(eventSystems[0].GetComponent<InputSystemUIInputModule>(), Is.Not.Null);
                 var view = Find(scene, "TabletopGame").GetComponent<TabletopGameView>();
                 Assert.That(view.Clocks, Has.Length.EqualTo(3));
+                var decisionUI = view.DecisionUI;
+                Assert.That(decisionUI, Is.Not.Null);
+                Assert.That(decisionUI.transform.IsChildOf(canvases[0].transform), Is.True);
+                Assert.That(decisionUI.IsVisible, Is.False, "씬에는 결정 조작부를 숨긴 상태로 저장한다");
+                Assert.That(decisionUI.KeepButton, Is.Not.Null);
+                Assert.That(decisionUI.SwapButton, Is.Not.SameAs(decisionUI.KeepButton));
+                Assert.That(canvases[0].GetComponentsInChildren<Button>(true), Has.Length.EqualTo(2));
+                foreach (var button in new[] { decisionUI.KeepButton, decisionUI.SwapButton })
+                {
+                    Assert.That(button.gameObject.activeInHierarchy, Is.False);
+                    Assert.That(button.GetComponentInChildren<TextMeshProUGUI>(true), Is.Not.Null);
+                    var icons = button.GetComponentsInChildren<Image>(true).Where(image => image != button.targetGraphic).ToArray();
+                    Assert.That(icons, Is.Not.Empty, "버튼 배경과 구분한 교체 가능한 아이콘 Image");
+                    foreach (var icon in icons)
+                    {
+                        Assert.That(icon.sprite, Is.Not.Null);
+                        Assert.That(AssetDatabase.GetAssetPath(icon.sprite), Is.Not.Empty, "임시 아이콘도 에셋 Sprite로 연결한다");
+                    }
+                }
                 var camera = Find(scene, "CameraRig/Main Camera").GetComponent<Camera>();
                 camera.aspect = 16f / 9;
                 foreach (var clock in view.Clocks)

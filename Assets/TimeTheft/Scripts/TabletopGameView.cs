@@ -8,6 +8,10 @@ namespace TimeTheft
     {
         [SerializeField] private TabletopClockView[] clocks;
         [SerializeField] private TabletopFocusCamera focusCamera;
+        [Header("결정 단계에만 표시하는 작은 화면 고정 선택지")]
+        [SerializeField] private TabletopDecisionUI decisionUI;
+        [Header("공개 행동·교환 판정·계수기 변화량 (월드 표시)")]
+        [SerializeField] private TabletopRoundFeedback roundFeedback;
         [Header("씬에 배치한 계수기와 보관 장치")]
         [SerializeField] private TextMeshPro playerLife, aiLife, pot;
         [SerializeField] private TabletopFocusTarget[] inspectionTargets;
@@ -18,6 +22,12 @@ namespace TimeTheft
         [Header("작은 라운드 표시와 H 키 도움말")]
         [SerializeField] private TextMeshPro roundLabel;
         [SerializeField] private GameObject helpCard;
+        [Header("시계 배분 목적지 · 씬에서 위치/회전 편집")]
+        [SerializeField] private Transform playerClockSlot, aiClockSlot, discardClockSlot;
+        [SerializeField, Min(.05f)] private float allocationDuration = .65f;
+        [SerializeField, Min(0)] private float allocationLift = .08f;
+        [SerializeField, Min(0)] private float allocationArc = .12f;
+        [SerializeField, Min(0)] private float aiSelectionPause = .45f;
         [Header("교환 궤적 (카메라·게임 규칙과 독립)")]
         [SerializeField, Min(0)] private float exchangeArc = .65f;
         [SerializeField, Min(0)] private float exchangeLift = .08f;
@@ -34,9 +44,17 @@ namespace TimeTheft
         private Vector3 playerNumberScale, aiNumberScale, potNumberScale;
         private Color playerIndicatorColor, aiIndicatorColor, potIndicatorColor;
         private bool exchanging;
+        private int movingClock = -1;
+        private bool discarding;
+        private Vector3 allocationStart, allocationEnd, allocationSide;
+        private Quaternion allocationStartRotation, allocationEndRotation, exchangePlayerRotation, exchangeAiRotation;
+        private readonly Vector3[] dealStarts = new Vector3[3], dealEnds = new Vector3[3];
+        private readonly Quaternion[] dealRotations = new Quaternion[3], homeRotations = new Quaternion[3];
 
         public TabletopClockView[] Clocks => clocks;
         public TabletopFocusCamera FocusCamera => focusCamera;
+        public TabletopDecisionUI DecisionUI => decisionUI;
+        public TabletopRoundFeedback RoundFeedback => roundFeedback;
         public TabletopFocusTarget Restart => restart;
         public TextMeshPro PlayerLife => playerLife;
         public TextMeshPro AiLife => aiLife;
@@ -47,16 +65,24 @@ namespace TimeTheft
         public bool HelpVisible => helpCard.activeSelf;
         public bool IsResultVisible { get; private set; }
         public bool IsCountingTime { get; private set; }
+        public Transform PlayerClockSlot => playerClockSlot;
+        public Transform AiClockSlot => aiClockSlot;
+        public Transform DiscardClockSlot => discardClockSlot;
+        public float AllocationDuration => allocationDuration;
+        public float AiSelectionPause => aiSelectionPause;
 
         public void Initialize(Action<int> select, Action<ClockAction> choose, Action newGame)
         {
-            if (clocks == null || clocks.Length != 3 || !focusCamera || !playerLife || !aiLife || !pot || !status || !detail || !restart || !restartLabel || !playerIndicator || !aiIndicator || !potIndicator || !resultDisplay || !roundLabel || !helpCard)
+            if (clocks == null || clocks.Length != 3 || !focusCamera || !decisionUI || !roundFeedback || !playerLife || !aiLife || !pot || !status || !detail || !restart || !restartLabel || !playerIndicator || !aiIndicator || !potIndicator || !resultDisplay || !roundLabel || !helpCard)
                 throw new InvalidOperationException("TabletopGameView의 시계·장치·결과 전표·도움말 참조를 연결하세요.");
+            if (!playerClockSlot || !aiClockSlot || !discardClockSlot)
+                throw new InvalidOperationException("시계 배분 목적지 3개를 연결하세요.");
             for (int i = 0; i < clocks.Length; i++)
             {
                 if (!clocks[i]) throw new InvalidOperationException("회중시계 3개를 연결하세요.");
                 clocks[i].Initialize(i, select, choose);
             }
+            decisionUI.Initialize(choose, focusCamera);
             if (initialized) restart.Clicked -= restartGame;
             restartGame = newGame;
             restart.Clicked += restartGame;
@@ -86,31 +112,97 @@ namespace TimeTheft
 
         public void PrepareDeal(int roundNumber)
         {
+            roundFeedback.Clear();
+            decisionUI.SetVisible(false);
+            focusCamera.ReturnToOverview();
             roundLabel.text = "R " + roundNumber.ToString("00");
             IsResultVisible = false;
             Inspectable(false);
-            foreach (var clock in clocks)
+            for (int i = 0; i < clocks.Length; i++)
             {
+                var clock = clocks[i];
+                dealStarts[i] = clock.transform.position;
+                dealRotations[i] = clock.transform.rotation;
                 clock.ResetPresentation();
+                dealEnds[i] = clock.transform.position;
+                homeRotations[i] = clock.transform.rotation;
+                clock.transform.SetPositionAndRotation(dealStarts[i], dealRotations[i]);
                 clock.Show(0, false, "", TableView.Gold);
             }
         }
 
-        public void OpenSelection()
+        public void DealFrame(float t)
         {
-            foreach (var clock in clocks) clock.Show(0, false, "", TableView.Gold, true);
-            Inspectable(true);
+            for (int i = 0; i < clocks.Length; i++)
+                clocks[i].transform.SetPositionAndRotation(Vector3.Lerp(dealStarts[i], dealEnds[i], t),
+                    Quaternion.Slerp(dealRotations[i], homeRotations[i], t));
         }
 
-        public void Allocate(TimeTheftMatch match)
+        public void OpenSelection(TimeTheftMatch match)
         {
-            hasSelectedClock = true;
-            helpCard.SetActive(false);
+            bool playerTurn = match.Stage == RoundStage.Selecting;
+            for (int i = 0; i < clocks.Length; i++)
+            {
+                if (i == match.PlayerClock || i == match.AiClock) continue;
+                clocks[i].Show(0, false, playerTurn ? (match.PlayerSelectsFirst ? "먼저 선택" : "남은 시계 선택")
+                    : "상대가 고르는 중", TableView.Gold, match.CanSelectClock(i));
+            }
+            // 비배율 연출은 FixedUpdate 없이도 끝난다. 입력을 열기 전에 이동한 Collider를 맞춘다.
+            Physics.SyncTransforms();
+            Inspectable(playerTurn);
+        }
+
+        public void BeginAllocation(int index, bool player)
+        {
+            if (player)
+            {
+                hasSelectedClock = true;
+                helpCard.SetActive(false);
+            }
+            focusCamera.ReturnToOverview();
             Inspectable(false);
-            clocks[match.PlayerClock].SetSelected(true);
-            clocks[match.PlayerClock].Show(0, false, "내 시계", TableView.PlayerColor);
-            clocks[match.AiClock].Show(0, false, "상대 시계", TableView.AiColor);
-            clocks[match.DiscardedClock].Hide();
+            foreach (var clock in clocks)
+            {
+                if (clock.FocusTarget.InputEnabled) clock.Show(0, false, "", TableView.Gold);
+                else clock.FocusTarget.SetInputEnabled(false);
+            }
+            clocks[index].SetSelected(player);
+            clocks[index].Show(0, false, player ? "내 시계" : "상대 시계", player ? TableView.PlayerColor : TableView.AiColor);
+            BeginClockMove(index, player ? playerClockSlot : aiClockSlot, false);
+        }
+
+        public void BeginDiscard(int index)
+        {
+            clocks[index].Show(0, false, "", TableView.Muted);
+            BeginClockMove(index, discardClockSlot, true);
+        }
+
+        private void BeginClockMove(int index, Transform destination, bool discard)
+        {
+            movingClock = index;
+            discarding = discard;
+            allocationStart = clocks[index].transform.position;
+            allocationEnd = destination.position;
+            allocationStartRotation = clocks[index].transform.rotation;
+            allocationEndRotation = destination.rotation;
+            allocationSide = Vector3.Cross(Vector3.up, allocationEnd - allocationStart).normalized * allocationArc;
+        }
+
+        public void AllocationFrame(float t)
+        {
+            if (movingClock < 0) return;
+            t = Mathf.Clamp01(t);
+            float arc = Mathf.Sin(t * Mathf.PI);
+            // 공용 줄의 다른 시계를 가로지르지 않도록 먼저 소유자 쪽으로 당긴다.
+            Vector3 control = new Vector3(allocationStart.x, allocationEnd.y, allocationEnd.z);
+            Vector3 position = discarding ? Vector3.Lerp(allocationStart, allocationEnd, t)
+                : Vector3.Lerp(Vector3.Lerp(allocationStart, control, t), Vector3.Lerp(control, allocationEnd, t), t);
+            clocks[movingClock].transform.SetPositionAndRotation(
+                position + allocationSide * arc + Vector3.up * (allocationLift * arc),
+                Quaternion.Slerp(allocationStartRotation, allocationEndRotation, t));
+            if (t < 1) return;
+            if (discarding) clocks[movingClock].Hide();
+            movingClock = -1;
         }
 
         public void RevealPlayer(TimeTheftMatch match)
@@ -120,13 +212,15 @@ namespace TimeTheft
 
         public void OpenDecision(TimeTheftMatch match)
         {
-            clocks[match.PlayerClock].Actions(true);
+            decisionUI.SetVisible(true);
             clocks[match.AiClock].Show(0, false, "상대 선택 중", TableView.AiColor);
+            Physics.SyncTransforms();
             Inspectable(true);
         }
 
         public void RevealActions(TimeTheftMatch match)
         {
+            decisionUI.SetVisible(false);
             foreach (var clock in clocks) clock.Actions(false);
             Inspectable(false);
             focusCamera.ReturnToOverview();
@@ -134,7 +228,10 @@ namespace TimeTheft
             clocks[match.AiClock].PlayActionFeedback(match.AiAction);
             clocks[match.PlayerClock].OwnerLabel.text = "나 · " + TableView.ActionName(match.PlayerAction);
             clocks[match.AiClock].OwnerLabel.text = "상대 · " + TableView.ActionName(match.AiAction);
+            roundFeedback.ShowActions(match.PlayerAction, match.AiAction);
         }
+
+        public void ShowExchangeVerdict(TimeTheftMatch match) => roundFeedback.ShowExchange(match.DidExchange);
 
         public void Exchange(TimeTheftMatch match, int oldPlayer, int oldAi)
         {
@@ -146,6 +243,8 @@ namespace TimeTheft
                 exchangeAi = oldAi;
                 exchangePlayerStart = clocks[oldPlayer].transform.position;
                 exchangeAiStart = clocks[oldAi].transform.position;
+                exchangePlayerRotation = clocks[oldPlayer].transform.rotation;
+                exchangeAiRotation = clocks[oldAi].transform.rotation;
                 exchangeSide = Vector3.Cross(Vector3.up, exchangeAiStart - exchangePlayerStart).normalized * exchangeArc;
                 exchanging = true;
                 clocks[oldPlayer].Show(0, false, "상대에게", TableView.AiColor);
@@ -161,6 +260,8 @@ namespace TimeTheft
             Vector3 rise = Vector3.up * (arc * exchangeLift);
             clocks[exchangePlayer].transform.position = Vector3.Lerp(exchangePlayerStart, exchangeAiStart, t) + exchangeSide * arc + rise;
             clocks[exchangeAi].transform.position = Vector3.Lerp(exchangeAiStart, exchangePlayerStart, t) - exchangeSide * arc + rise;
+            clocks[exchangePlayer].transform.rotation = Quaternion.Slerp(exchangePlayerRotation, exchangeAiRotation, t);
+            clocks[exchangeAi].transform.rotation = Quaternion.Slerp(exchangeAiRotation, exchangePlayerRotation, t);
             if (t >= 1) exchanging = false;
         }
 
@@ -168,11 +269,25 @@ namespace TimeTheft
         {
             clocks[match.PlayerClock].Show(match.PlayerValue, true, "내 최종 시계", TableView.PlayerColor);
             clocks[match.AiClock].Show(match.AiValue, true, "상대 최종 시계", TableView.AiColor);
+            roundFeedback.ShowValues();
         }
 
         public void Settle(TimeTheftMatch match)
         {
+            roundFeedback.ShowSettlement(match.PlayerLoss, match.AiLoss);
             BeginNumberChange(match);
+        }
+
+        public void HoldRoundResult() => roundFeedback.HoldResult();
+
+        public void ShowAward(TimeTheftMatch match) => roundFeedback.ShowAward(match.Winner == MatchWinner.Player, match.Award);
+
+        public void CloseRound() => roundFeedback.PrepareNextRound();
+
+        public void RoundCloseFrame(float t)
+        {
+            foreach (var clock in clocks)
+                if (clock.gameObject.activeSelf) clock.CloseFrame(t);
         }
 
         public void Numbers(TimeTheftMatch match)
@@ -197,6 +312,7 @@ namespace TimeTheft
         {
             if (!IsCountingTime) return;
             t = Mathf.Clamp01(t);
+            roundFeedback.TransferFrame(t);
             int player = Mathf.RoundToInt(Mathf.Lerp(fromPlayer, toPlayer, t));
             int ai = Mathf.RoundToInt(Mathf.Lerp(fromAi, toAi, t));
             // 표시 중에도 수명 + 판돈 총량을 보존한다. 독립 반올림 오차를 만들지 않는다.
@@ -218,6 +334,7 @@ namespace TimeTheft
             shownPlayer = player;
             shownAi = ai;
             shownPot = stake;
+            if (!playerLife || !aiLife || !pot) return;
             playerLife.text = player + "h";
             aiLife.text = ai + "h";
             pot.text = stake + "h";
@@ -227,6 +344,7 @@ namespace TimeTheft
 
         private void NumberFeedback(TextMeshPro number, SpriteRenderer indicator, Vector3 scale, Color color, float pulse)
         {
+            if (!number || !indicator) return;
             number.transform.localScale = scale * (1 + numberPulseScale * pulse);
             Color bright = color * indicatorBrightness;
             bright.a = color.a;
@@ -243,10 +361,14 @@ namespace TimeTheft
         public void CancelPresentation()
         {
             if (!initialized) return;
-            focusCamera.ReturnToOverview();
+            if (decisionUI) decisionUI.SetVisible(false);
+            if (roundFeedback) roundFeedback.Clear();
+            if (focusCamera) focusCamera.ReturnToOverview();
             exchanging = IsCountingTime = false;
+            movingClock = -1;
             Inspectable(false);
-            foreach (var clock in clocks) clock.ResetPresentation();
+            foreach (var clock in clocks)
+                if (clock) clock.ResetPresentation();
             ResetNumberFeedback();
         }
 
@@ -273,7 +395,8 @@ namespace TimeTheft
 
         private void Inspectable(bool enabled)
         {
-            foreach (var target in inspectionTargets) target.SetInputEnabled(enabled);
+            foreach (var target in inspectionTargets)
+                if (target) target.SetInputEnabled(enabled);
         }
 
         private void OnDestroy() { if (initialized && restart) restart.Clicked -= restartGame; }

@@ -9,6 +9,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using UnityEngine.UI;
 
 namespace TimeTheft.Tests
 {
@@ -28,6 +29,11 @@ namespace TimeTheft.Tests
         public IEnumerator LoadGame()
         {
             previousTimeScale = Time.timeScale;
+            TabletopDecisionUITestInput.DisableSceneModules();
+            input = new InputTestFixture();
+            input.Setup();
+            mouse = InputSystem.AddDevice<Mouse>("TabletopGameMouse");
+            keyboard = InputSystem.AddDevice<Keyboard>("TabletopGameKeyboard");
             yield return EditorSceneManager.LoadSceneInPlayMode("Assets/Scenes/TabletopGame.unity",
                 new LoadSceneParameters(LoadSceneMode.Single));
             yield return null;
@@ -41,11 +47,12 @@ namespace TimeTheft.Tests
             var serialized = new SerializedObject(controller);
             serialized.FindProperty("settings").objectReferenceValue = settings;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+            TabletopResultTestTiming.SetAll(controller, .05f);
+            var serializedView = new SerializedObject(controller.View);
+            serializedView.FindProperty("allocationDuration").floatValue = .05f;
+            serializedView.FindProperty("aiSelectionPause").floatValue = .05f;
+            serializedView.ApplyModifiedPropertiesWithoutUndo();
 
-            input = new InputTestFixture();
-            input.Setup();
-            mouse = InputSystem.AddDevice<Mouse>("TabletopGameMouse");
-            keyboard = InputSystem.AddDevice<Keyboard>("TabletopGameKeyboard");
             camera = Camera.main;
             Assert.That(camera, Is.Not.Null);
             look = camera.GetComponent<TabletopCameraLook>();
@@ -64,6 +71,7 @@ namespace TimeTheft.Tests
         {
             if (controller) controller.enabled = false;
             if (focus) focus.enabled = false;
+            TabletopDecisionUITestInput.DisableSceneModules();
             Time.timeScale = previousTimeScale;
             if (settings) UnityEngine.Object.Destroy(settings);
             yield return null;
@@ -86,14 +94,18 @@ namespace TimeTheft.Tests
                     yield return WaitFor(RoundStage.Selecting);
                     AssertAllClocksHidden();
                     AssertInGamePresentation();
+                    Assert.That(controller.Match.PlayerSelectsFirst, Is.EqualTo(controller.Match.Round % 2 == 1));
+                    Assert.That(controller.Match.AiClock >= 0, Is.EqualTo(!controller.Match.PlayerSelectsFirst),
+                        "AI 선공 라운드는 상대 배분이 끝난 뒤 잔여 시계를 선택한다");
                     Assert.That(controller.View.RoundLabel.text, Does.Contain(controller.Match.Round.ToString("00")));
                     int index = (controller.Match.Round + Math.Abs(seeds[game] % 3)) % 3;
+                    if (!controller.Match.CanSelectClock(index)) index = (index + 1) % 3;
                     var selected = controller.View.Clocks[index];
                     yield return Click(selected.FocusTarget, () =>
                     {
-                        Assert.That(controller.Match.Stage, Is.EqualTo(RoundStage.Inspecting));
+                        Assert.That(controller.Match.Stage, Is.EqualTo(RoundStage.Allocating));
                         Assert.That(controller.Match.PlayerClock, Is.EqualTo(index));
-                        Assert.That(focus.CurrentTarget, Is.SameAs(selected.FocusTarget));
+                        Assert.That(focus.CurrentTarget, Is.Null, "시계가 테이블에서 이동하는 동안 전체 구도 유지");
                         Assert.That(selected.ValueLabel.text, Is.EqualTo("?"));
                         Assert.That(selected.IsRevealed, Is.False, "배분 완료 전에는 바늘도 숨긴다");
                         Assert.That(controller.View.HelpVisible, Is.False, "시계를 선택하면 초회 도움말을 닫는다");
@@ -113,15 +125,18 @@ namespace TimeTheft.Tests
                     Assert.That(controller.View.Clocks[match.AiClock].OwnerLabel.text,
                         Is.EqualTo("상대 선택 중"), "행동 확정 전 상대 행동 비공개");
                     Assert.That(selected.OwnerLabel.text, Is.EqualTo("내 시계"));
+                    Assert.That(Vector3.Distance(selected.transform.position, controller.View.PlayerClockSlot.position), Is.LessThan(.001f));
+                    Assert.That(Vector3.Distance(controller.View.Clocks[match.AiClock].transform.position,
+                        controller.View.AiClockSlot.position), Is.LessThan(.001f));
                     AssertInGamePresentation();
-                    Assert.That(selected.Keep.InputEnabled, Is.True);
-                    Assert.That(selected.Swap.InputEnabled, Is.True);
+                    Assert.That(controller.View.DecisionUI.IsVisible, Is.True);
+                    Assert.That(selected.Keep.InputEnabled || selected.Swap.InputEnabled, Is.False);
 
                     int round = match.Round;
                     int oldPlayer = match.PlayerClock, oldAi = match.AiClock;
                     int previousPlayer = match.PlayerLife, previousAi = match.AiLife, previousPot = match.Pot;
                     ClockAction action = round % 2 == 0 ? ClockAction.Keep : ClockAction.Swap;
-                    yield return Click(action == ClockAction.Keep ? selected.Keep : selected.Swap, () =>
+                    yield return Click(action == ClockAction.Keep ? controller.View.DecisionUI.KeepButton : controller.View.DecisionUI.SwapButton, () =>
                     {
                         Assert.That(match.Stage, Is.EqualTo(RoundStage.Revealing));
                         Assert.That(match.PlayerAction, Is.EqualTo(action));
@@ -267,7 +282,7 @@ namespace TimeTheft.Tests
             var selected = controller.View.Clocks[1];
             yield return Click(selected.FocusTarget);
             yield return WaitFor(RoundStage.Deciding);
-            yield return Click(selected.Keep);
+            yield return Click(controller.View.DecisionUI.KeepButton);
             yield return WaitFor(RoundStage.GameOver);
             float deadline = Time.realtimeSinceStartup + 3;
             while (!controller.View.IsResultVisible && Time.realtimeSinceStartup < deadline) yield return null;
@@ -284,17 +299,22 @@ namespace TimeTheft.Tests
         [UnityTest]
         public IEnumerator RestartKeyCancelsInspectionRevealAndSettlementWithoutStaleInput()
         {
+            TabletopResultTestTiming.SetAll(controller, .25f);
             settings.MoveDuration = settings.RevealDuration = settings.SettlementDuration = .25f;
+            var serializedView = new SerializedObject(controller.View);
+            serializedView.FindProperty("allocationDuration").floatValue = .25f;
+            serializedView.ApplyModifiedPropertiesWithoutUndo();
             var clocks = (TabletopClockView[])controller.View.Clocks.Clone();
-            foreach (RoundStage stage in new[] { RoundStage.Inspecting, RoundStage.Revealing, RoundStage.Settling })
+            foreach (RoundStage stage in new[] { RoundStage.Allocating, RoundStage.Inspecting, RoundStage.Revealing, RoundStage.Settling })
             {
                 yield return WaitFor(RoundStage.Selecting);
                 var selected = controller.View.Clocks[(int)stage % 3];
                 yield return Click(selected.FocusTarget);
-                if (stage != RoundStage.Inspecting)
+                if (stage == RoundStage.Inspecting) yield return WaitFor(stage);
+                else if (stage != RoundStage.Allocating)
                 {
                     yield return WaitFor(RoundStage.Deciding);
-                    yield return Click(selected.Swap);
+                    yield return Click(controller.View.DecisionUI.SwapButton);
                     if (stage == RoundStage.Settling) yield return WaitFor(stage);
                 }
                 Assert.That(controller.Match.Stage, Is.EqualTo(stage));
@@ -340,7 +360,10 @@ namespace TimeTheft.Tests
             {
                 Vector3 screen = camera.WorldToScreenPoint(collider.bounds.center);
                 Assert.That(screen.z, Is.GreaterThan(camera.nearClipPlane), target.name);
-                Assert.That(camera.pixelRect.Contains(screen), Is.True, target.name + " 화면 내 선택 영역");
+                Assert.That(camera.pixelRect.Contains(screen), Is.True,
+                    $"{target.name} 화면 내 선택 영역 / R{controller.Match.Round} {controller.Match.Stage} / " +
+                    $"대상 {target.transform.position} Collider {collider.bounds.center} Screen {screen} Rect {camera.pixelRect} / " +
+                    $"카메라 {camera.transform.position} {camera.transform.eulerAngles} Focus {focus.CurrentTarget}");
                 PointAt(screen);
                 yield return null;
             }
@@ -349,6 +372,15 @@ namespace TimeTheft.Tests
             yield return null;
             afterPress?.Invoke();
             input.Release(mouse.leftButton);
+        }
+
+        private IEnumerator Click(Button button, Action afterRelease = null)
+        {
+            yield return TabletopDecisionUITestInput.Click(input, mouse, button, () =>
+            {
+                Assert.That(controller.Match.Stage, Is.EqualTo(RoundStage.Deciding), "UI 행동은 pointer down에서 확정하지 않는다");
+                Assert.That(controller.View.DecisionUI.IsVisible, Is.True);
+            }, afterRelease);
         }
 
         private IEnumerator WaitFor(RoundStage stage)
@@ -383,11 +415,12 @@ namespace TimeTheft.Tests
         private void AssertAllClocksHidden()
         {
             Assert.That(controller.View.Clocks, Has.Length.EqualTo(3));
-            foreach (var clock in controller.View.Clocks)
+            for (int i = 0; i < controller.View.Clocks.Length; i++)
             {
+                var clock = controller.View.Clocks[i];
                 Assert.That(clock.gameObject.activeSelf, Is.True);
                 AssertPrivateClock(clock);
-                Assert.That(clock.FocusTarget.InputEnabled, Is.True);
+                Assert.That(clock.FocusTarget.InputEnabled, Is.EqualTo(controller.Match.CanSelectClock(i)));
                 Assert.That(clock.FocusTarget.FocusOnClick, Is.False);
                 Assert.That(clock.Keep.InputEnabled, Is.False);
                 Assert.That(clock.Swap.InputEnabled, Is.False);
@@ -431,6 +464,12 @@ namespace TimeTheft.Tests
             Assert.That(controller.View.Status.gameObject.activeInHierarchy, Is.False, "일반 플레이에서 종료 결과 숨김");
             Assert.That(controller.View.Detail.gameObject.activeInHierarchy, Is.False, "일반 플레이에서 종료 상세 숨김");
             Assert.That(controller.View.Restart.InputEnabled, Is.False, "다시하기는 종료 후에만 입력 허용");
+            bool deciding = controller.Match.Stage == RoundStage.Deciding;
+            Assert.That(controller.View.DecisionUI.IsVisible, Is.EqualTo(deciding), "행동 UI는 결정 단계에서만 표시한다");
+            Assert.That(controller.View.DecisionUI.KeepButton.interactable, Is.EqualTo(deciding));
+            Assert.That(controller.View.DecisionUI.SwapButton.interactable, Is.EqualTo(deciding));
+            foreach (var clock in controller.View.Clocks)
+                Assert.That(clock.Keep.InputEnabled || clock.Swap.InputEnabled, Is.False, "기본 플레이에서 기존 월드 장치를 잠근다");
         }
 
         private IEnumerator ToggleHelpKey()

@@ -13,6 +13,14 @@ namespace TimeTheft
         [SerializeField, Range(15, 90)] private float fieldOfView = 42;
         [Tooltip("끄면 집중 이동 없이 클릭 이벤트만 전달한다. 테이블 조작부에서 사용한다.")]
         [SerializeField] private bool focusOnClick = true;
+        [Header("Magnetic Hover · FocusPoint와 별도인 얕은 구도")]
+        [Tooltip("선택 사항: 호버 카메라의 월드 위치/방향. 비우면 전체 테이블 구도에서 대상 쪽으로 조금 이동한다. Roll은 0으로 편집한다.")]
+        [SerializeField] private Transform hoverPoint;
+        [SerializeField, Range(0, 2)] private float hoverStrength = 1;
+        [Tooltip("자동 호버 구도에 더하는 위치. 기본 카메라의 오른쪽/위/앞 방향 단위.")]
+        [SerializeField] private Vector3 hoverPositionOffset;
+        [Tooltip("자동 호버 구도에 더하는 Pitch(X), Yaw(Y) 각도. Roll은 추가하지 않는다.")]
+        [SerializeField] private Vector2 hoverRotationOffset;
         [Header("호버 강조 (공유 머티리얼은 변경하지 않음)")]
         [SerializeField] private SpriteRenderer[] highlightRenderers = new SpriteRenderer[0];
         [SerializeField, Range(1, 1.5f)] private float hoverBrightness = 1.18f;
@@ -26,6 +34,10 @@ namespace TimeTheft
         public bool IsAvailable => isActiveAndEnabled && focusPoint && focusPoint.gameObject.activeInHierarchy;
         public bool InputEnabled { get; private set; } = true;
         public bool FocusOnClick => focusOnClick;
+        public Transform HoverPoint => hoverPoint;
+        public float HoverStrength => Mathf.Clamp(hoverStrength, 0, 2);
+        public Vector3 HoverPositionOffset => hoverPositionOffset;
+        public Vector2 HoverRotationOffset => hoverRotationOffset;
         public bool IsHighlighted => highlighted;
         public event Action Clicked;
 

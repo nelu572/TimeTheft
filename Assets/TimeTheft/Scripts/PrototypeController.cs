@@ -46,7 +46,7 @@ namespace TimeTheft
         {
             if (Match == null || !Match.SelectClock(index)) return;
             view.CloseSelection();
-            StartCoroutine(Allocate());
+            StartCoroutine(Allocate(index, true));
         }
 
         public void ChooseAction(ClockAction action)
@@ -69,18 +69,39 @@ namespace TimeTheft
             view.PrepareDeal(Match.Round);
             yield return Animate(settings.MoveDuration, view.DealFrame);
             Match.OpenSelection();
-            view.OpenSelection(Match.Round);
+            view.OpenSelection(Match);
             Snapshot();
+            if (Match.Stage == RoundStage.SelectingAi) yield return SelectAi();
         }
 
-        private IEnumerator Allocate()
+        private IEnumerator SelectAi()
+        {
+            view.OpenSelection(Match);
+            yield return Animate(settings.MoveDuration, _ => { });
+            if (!Match.SelectAiClock()) yield break;
+            yield return Allocate(Match.AiClock, false);
+        }
+
+        private IEnumerator Allocate(int index, bool player)
         {
             Snapshot();
-            int player = Match.PlayerClock, ai = Match.AiClock, discarded = Match.DiscardedClock;
-            view.PrepareAllocation(player, ai, discarded);
-            yield return Animate(settings.MoveDuration, t => view.AllocationFrame(player, ai, discarded, t));
-            view.RevealPlayerClock(player, Match.PlayerValue);
-            yield return Animate(settings.RevealDuration * .7f, t => view.PulseClock(player, t, .07f));
+            view.PrepareAllocation(index, player);
+            yield return Animate(settings.MoveDuration, t => view.AllocationFrame(index, player, t));
+            Match.CompleteAllocation();
+            if (Match.Stage == RoundStage.SelectingAi)
+            {
+                yield return SelectAi();
+                yield break;
+            }
+            if (Match.Stage == RoundStage.Selecting)
+            {
+                view.OpenSelection(Match);
+                Snapshot();
+                yield break;
+            }
+            yield return Animate(settings.MoveDuration, t => view.DiscardFrame(Match.DiscardedClock, t));
+            view.RevealPlayerClock(Match.PlayerClock, Match.PlayerValue);
+            yield return Animate(settings.RevealDuration * .7f, t => view.PulseClock(Match.PlayerClock, t, .07f));
             Match.OpenDecision();
             view.OpenDecision(firstDecision);
             firstDecision = false;

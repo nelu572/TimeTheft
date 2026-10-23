@@ -106,10 +106,16 @@ namespace TimeTheft
             }
         }
 
-        public void OpenSelection(int round)
+        public void OpenSelection(TimeTheftMatch match)
         {
-            foreach (var clock in Clocks) { clock.Show(0, false, "선택 가능", Gold); clock.SetSelectable(true); }
-            Cue("시계를 선택하세요", round == 1 ? "세 시계 중 하나를 선택하면, 나에게만 숫자가 보입니다" : "가져갈 시간을 선택하세요", false);
+            for (int i = 0; i < Clocks.Length; i++)
+            {
+                if (i == match.PlayerClock || i == match.AiClock) continue;
+                Clocks[i].Show(0, false, match.CanSelectClock(i) ? "선택 가능" : "", Gold);
+                Clocks[i].SetSelectable(match.CanSelectClock(i));
+            }
+            Cue(match.Stage == RoundStage.Selecting ? "시계를 선택하세요" : "상대가 시계를 선택합니다",
+                match.PlayerSelectsFirst ? "이번 라운드는 내가 먼저 선택합니다" : "이번 라운드는 상대가 먼저 선택합니다", false);
         }
 
         public void CloseSelection()
@@ -117,21 +123,23 @@ namespace TimeTheft
             foreach (var clock in Clocks) clock.SetSelectable(false);
         }
 
-        public void PrepareAllocation(int player, int ai, int discarded)
+        public void PrepareAllocation(int index, bool player)
         {
-            Clocks[player].Show(0, false, "나의 시계", PlayerColor);
-            Clocks[ai].Show(0, false, "상대의 시계", AiColor);
-            Clocks[discarded].Show(0, false, "버림 · 비공개", Muted);
-            Cue("서로의 시계를 가져옵니다", "남은 시계는 공개하지 않고 버립니다");
+            CloseSelection();
+            Clocks[index].Show(0, false, player ? "나의 시계" : "상대의 시계", player ? PlayerColor : AiColor);
+            Cue(player ? "내 시계를 가져옵니다" : "상대가 시계를 가져갑니다", "");
         }
 
-        public void AllocationFrame(int player, int ai, int discarded, float t)
+        public void AllocationFrame(int index, bool player, float t)
         {
-            Clocks[player].Rect.anchoredPosition = Vector2.Lerp(DealPosition(player), PlayerPosition, t);
-            Clocks[ai].Rect.anchoredPosition = Vector2.Lerp(DealPosition(ai), AiPosition, t);
-            Clocks[discarded].Rect.anchoredPosition = Vector2.Lerp(DealPosition(discarded), SlotPosition(discardSlot), t);
-            Clocks[discarded].SetRotation(Mathf.Lerp(0, -30, t));
-            Clocks[discarded].Group.alpha = 1 - t;
+            Clocks[index].Rect.anchoredPosition = Vector2.Lerp(DealPosition(index), player ? PlayerPosition : AiPosition, t);
+        }
+
+        public void DiscardFrame(int index, float t)
+        {
+            Clocks[index].Rect.anchoredPosition = Vector2.Lerp(DealPosition(index), SlotPosition(discardSlot), t);
+            Clocks[index].SetRotation(Mathf.Lerp(0, -30, t));
+            Clocks[index].Group.alpha = 1 - t;
         }
 
         public void RevealPlayerClock(int player, int value)

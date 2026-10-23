@@ -32,6 +32,7 @@ namespace TimeTheft
         private Quaternion homeRotation, visualRotation, lidRotation;
         private float lift, revealElapsed, actionElapsed;
         private bool selected, revealed;
+        private bool closing;
         private ClockAction feedbackAction;
 
         public TabletopFocusTarget FocusTarget => focusTarget;
@@ -69,6 +70,7 @@ namespace TimeTheft
         public void Show(int value, bool revealed, string owner, Color tone, bool selectable = false)
         {
             gameObject.SetActive(true);
+            closing = false;
             if (revealed && !this.revealed) revealElapsed = 0;
             this.revealed = revealed;
             if (!revealed) lidPivot.localRotation = lidRotation;
@@ -106,7 +108,7 @@ namespace TimeTheft
 
         public void ResetPresentation()
         {
-            if (!initialized) return;
+            if (!initialized || !focusTarget || !visual || !lidPivot || !valueLabel || !hand) return;
             focusTarget.SetInputEnabled(false);
             Actions(false);
             keepObject.ResetPresentation();
@@ -133,7 +135,7 @@ namespace TimeTheft
                 revealElapsed += Time.unscaledDeltaTime;
                 open = Mathf.SmoothStep(0, 1, Mathf.Clamp01(revealElapsed / Mathf.Max(.05f, revealDuration)));
             }
-            lidPivot.localRotation = lidRotation * Quaternion.Euler(open * lidOpenDegrees, 0, 0);
+            if (!closing) lidPivot.localRotation = lidRotation * Quaternion.Euler(open * lidOpenDegrees, 0, 0);
             float revealPulse = revealed ? Mathf.Sin(open * Mathf.PI) : 0;
             visual.localPosition = visualPosition + Vector3.back * (lift + actionPulse * .015f);
             visual.localRotation = visualRotation * Quaternion.Euler(0, 0,
@@ -143,7 +145,9 @@ namespace TimeTheft
 
         private void RestoreVisual()
         {
+            if (!visual || !lidPivot) return;
             lift = 0;
+            closing = false;
             actionElapsed = actionDuration;
             revealElapsed = 0;
             visual.localPosition = visualPosition;
@@ -156,6 +160,16 @@ namespace TimeTheft
         {
             keepObject.SetVisible(visible);
             swapObject.SetVisible(visible);
+        }
+
+        public void CloseFrame(float t)
+        {
+            closing = true;
+            lidPivot.localRotation = lidRotation * Quaternion.Euler((1 - Mathf.Clamp01(t)) * lidOpenDegrees, 0, 0);
+            if (t < .5f) return;
+            revealed = false;
+            valueLabel.text = "?";
+            hand.gameObject.SetActive(false);
         }
 
         public void Hide()

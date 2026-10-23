@@ -40,6 +40,7 @@ namespace TimeTheft
 
         public void SetVisible(bool value)
         {
+            if (!target || !selectionCollider || !artwork || !mechanism) return;
             if (!initialized) Initialize();
             visible = value;
             target.SetInputEnabled(value);
@@ -51,7 +52,7 @@ namespace TimeTheft
 
         public void ResetPresentation()
         {
-            if (!initialized) return;
+            if (!initialized || !target || !selectionCollider || !artwork || !mechanism) return;
             visible = false;
             progress = hover = press = 0;
             target.SetInputEnabled(false);

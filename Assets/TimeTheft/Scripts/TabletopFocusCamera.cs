@@ -1,5 +1,8 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using System.Collections.Generic;
 
 namespace TimeTheft
 {
@@ -11,6 +14,20 @@ namespace TimeTheft
         [SerializeField] private LayerMask interactionLayers = ~0;
         [Tooltip("플레이 씬에서 집중 중에도 유지/교환 등 월드 조작부를 클릭할 수 있게 한다.")]
         [SerializeField] private bool allowInputWhileFocused;
+        [Header("Magnetic Hover · 클릭 집중/복귀가 우선")]
+        [UnityEngine.Serialization.FormerlySerializedAs("lockCameraOnHover")]
+        [SerializeField] private bool magneticHover = true;
+        [SerializeField, Range(.05f, .4f)] private float hoverTransitionDuration = .16f;
+        [SerializeField, Range(.05f, .5f)] private float hoverReturnDuration = .18f;
+        [Tooltip("기본 테이블 구도 기준 좌우/상하 최대 이동. HoverPoint가 없는 대상에 적용한다.")]
+        [SerializeField] private Vector2 hoverTravel = new Vector2(.12f, .06f);
+        [SerializeField, Min(0)] private float hoverForwardTravel = .06f;
+        [Tooltip("대상 방향에 따른 최대 Yaw(X)/Pitch(Y). Roll은 추가하지 않는다.")]
+        [SerializeField] private Vector2 hoverDegrees = new Vector2(1.6f, 1);
+        [Tooltip("실제 호버가 끝나도 경계 떨림 때문에 카메라가 즉시 움직이지 않도록 기다리는 시간.")]
+        [SerializeField, Range(0, .3f)] private float hoverReleaseDelay = .08f;
+        [Tooltip("마지막으로 가리킨 Collider의 화면 경계 밖 여유 픽셀. 클릭 영역은 늘리지 않는다.")]
+        [SerializeField, Range(0, 24)] private float hoverExitPadding = 6;
         private enum ViewState { Free, MovingToTarget, Focused, Returning }
         private ViewState state;
         private Camera viewCamera;
@@ -24,11 +41,26 @@ namespace TimeTheft
         private float elapsed;
         private float duration;
         private bool windowFocused;
+        private TabletopFocusTarget lockTarget;
+        private Collider lockCollider;
+        private float hoverExitElapsed;
+        private Vector3 hoverRayPosition;
+        private Quaternion hoverRayRotation;
+        private Vector2 lastPointer;
+        private bool hadPointer;
+        private EventSystem pointerEventSystem;
+        private PointerEventData uiPointer;
+        private readonly List<RaycastResult> uiHits = new List<RaycastResult>();
+        private int suppressedPointerFrame = -1;
 
         public TabletopFocusTarget CurrentTarget { get; private set; }
         public TabletopFocusTarget HoveredTarget { get; private set; }
+        public TabletopFocusTarget MagneticTarget => lockTarget;
         public bool HasCameraControl => state != ViewState.Free;
         public bool IsTransitioning => state == ViewState.MovingToTarget || state == ViewState.Returning;
+
+        // UI가 제출과 동시에 숨겨져도 같은 프레임의 클릭이 뒤의 물체로 통과하지 않는다.
+        public void SuppressPointerForCurrentFrame() => suppressedPointerFrame = Time.frameCount;
 
         private void Awake()
         {
@@ -44,7 +76,11 @@ namespace TimeTheft
         private void OnApplicationFocus(bool hasFocus)
         {
             windowFocused = hasFocus;
-            if (!hasFocus) SetHover(null);
+            if (!hasFocus)
+            {
+                SetHover(null);
+                ClearMagneticHover();
+            }
         }
 
         private void Update()
@@ -69,27 +105,51 @@ namespace TimeTheft
                 if (!allowInputWhileFocused || state != ViewState.Focused)
                 {
                     SetHover(null);
+                    ClearMagneticHover();
                     return;
                 }
             }
 
             TabletopFocusTarget target = null;
-            if (windowFocused && mouse != null && viewCamera.pixelRect.Contains(mouse.position.ReadValue()))
+            Collider hitCollider = null;
+            bool pointerAvailable = windowFocused && mouse != null && viewCamera.pixelRect.Contains(mouse.position.ReadValue());
+            Vector2 pointer = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
+            if (pointerAvailable && (suppressedPointerFrame == Time.frameCount || PointerOverUI(pointer))) pointerAvailable = false;
+            bool pointerMoved = !hadPointer || (pointer - lastPointer).sqrMagnitude >= 1;
+            if (pointerMoved) lastPointer = pointer;
+            hadPointer = pointerAvailable;
+            if (pointerAvailable)
             {
-                Ray ray = viewCamera.ScreenPointToRay(mouse.position.ReadValue());
-                if (Physics.Raycast(ray, out RaycastHit hit, rayDistance, interactionLayers, QueryTriggerInteraction.Ignore))
+                Physics.SyncTransforms();
+                target = RaycastTarget(viewCamera.ScreenPointToRay(pointer), out hitCollider);
+            }
+            // 클릭은 보조 ray나 경계 여유로 넓히지 않고, 현재 화면의 실제 대상만 사용한다.
+            var clickTarget = target;
+            if (pointerAvailable && magneticHover && state == ViewState.Free && ValidMagneticTarget())
+            {
+                Ray currentRay = viewCamera.ScreenPointToRay(pointer);
+                Quaternion inverse = Quaternion.Inverse(transform.rotation);
+                Ray referenceRay = new Ray(hoverRayPosition + hoverRayRotation * (inverse * (currentRay.origin - transform.position)),
+                    hoverRayRotation * (inverse * currentRay.direction));
+                Collider referenceCollider;
+                var referenceTarget = RaycastTarget(referenceRay, out referenceCollider);
+                // 카메라 자체의 이동은 호버를 해제하거나 이웃 대상으로 바꾸지 않는다.
+                // 실제 포인터 이동으로 가리킨 새 대상은 즉시 우선한다.
+                if (referenceTarget == lockTarget && (!target || !pointerMoved))
                 {
-                    var candidate = hit.collider.GetComponentInParent<TabletopFocusTarget>();
-                    if (candidate && candidate.IsAvailable && candidate.InputEnabled) target = candidate;
+                    target = lockTarget;
+                    hitCollider = referenceCollider;
                 }
             }
             SetHover(target);
-            if (target && mouse.leftButton.wasPressedThisFrame)
+            UpdateMagneticHover(target, hitCollider, pointerAvailable, pointer);
+            if (clickTarget && mouse.leftButton.wasPressedThisFrame)
             {
                 SetHover(null);
-                bool focusOnClick = target.FocusOnClick;
-                target.Activate();
-                if (focusOnClick && target && target.IsAvailable) Focus(target);
+                ClearMagneticHover();
+                bool focusOnClick = clickTarget.FocusOnClick;
+                clickTarget.Activate();
+                if (focusOnClick && clickTarget && clickTarget.IsAvailable) Focus(clickTarget);
             }
         }
 
@@ -97,6 +157,7 @@ namespace TimeTheft
         {
             if (!isActiveAndEnabled || !target || !target.IsAvailable) return false;
             SetHover(null);
+            ClearMagneticHover();
             look.SetSuspended(true);
             CurrentTarget = target;
             BeginTransition(target.TransitionDuration);
@@ -106,6 +167,7 @@ namespace TimeTheft
 
         public void ReturnToOverview()
         {
+            ClearMagneticHover();
             if (!HasCameraControl || state == ViewState.Returning) return;
             CurrentTarget = null;
             BeginTransition(returnDuration);
@@ -155,9 +217,128 @@ namespace TimeTheft
             if (HoveredTarget) HoveredTarget.SetHighlighted(true);
         }
 
+        private TabletopFocusTarget RaycastTarget(Ray ray, out Collider collider)
+        {
+            collider = null;
+            if (!Physics.Raycast(ray, out RaycastHit hit, rayDistance, interactionLayers, QueryTriggerInteraction.Ignore)) return null;
+            var target = hit.collider.GetComponentInParent<TabletopFocusTarget>();
+            if (!target || !target.IsAvailable || !target.InputEnabled) return null;
+            collider = hit.collider;
+            return target;
+        }
+
+        private bool PointerOverUI(Vector2 pointer)
+        {
+            var events = EventSystem.current;
+            if (!events) return false;
+            if (pointerEventSystem != events || uiPointer == null)
+            {
+                pointerEventSystem = events;
+                uiPointer = new PointerEventData(events);
+            }
+            // IsPointerOverGameObject의 이전 프레임 캐시에 의존하지 않는다.
+            uiPointer.Reset();
+            uiPointer.position = pointer;
+            uiHits.Clear();
+            events.RaycastAll(uiPointer, uiHits);
+            foreach (var hit in uiHits)
+                if (hit.module is GraphicRaycaster) return true;
+            return false;
+        }
+
+        private bool ValidMagneticTarget()
+        {
+            return lockTarget && lockTarget.IsAvailable && lockTarget.InputEnabled && lockCollider &&
+                lockCollider.enabled && lockCollider.gameObject.activeInHierarchy;
+        }
+
+        private void UpdateMagneticHover(TabletopFocusTarget target, Collider collider, bool pointerAvailable, Vector2 pointer)
+        {
+            if (!magneticHover || state != ViewState.Free || !pointerAvailable || !look.isActiveAndEnabled)
+            {
+                ClearMagneticHover();
+                return;
+            }
+            if (target)
+            {
+                if (lockTarget != target)
+                {
+                    hoverRayPosition = transform.position;
+                    hoverRayRotation = transform.rotation;
+                    MoveToHover(target, collider);
+                }
+                lockTarget = target;
+                lockCollider = collider;
+                hoverExitElapsed = 0;
+                return;
+            }
+            if (!ValidMagneticTarget())
+            {
+                ClearMagneticHover();
+                return;
+            }
+            if (WithinHoverMargin(pointer))
+            {
+                hoverExitElapsed = 0;
+                return;
+            }
+            hoverExitElapsed += Time.unscaledDeltaTime;
+            if (hoverExitElapsed >= hoverReleaseDelay) ClearMagneticHover();
+        }
+
+        private void MoveToHover(TabletopFocusTarget target, Collider collider)
+        {
+            if (target.HoverPoint && target.HoverPoint.gameObject.activeInHierarchy)
+            {
+                look.MoveToHoverPose(target.HoverPoint.position, target.HoverPoint.rotation, hoverTransitionDuration);
+                return;
+            }
+            Transform parent = transform.parent;
+            Vector3 overview = parent ? parent.TransformPoint(homePosition) : homePosition;
+            Quaternion rotation = parent ? parent.rotation * homeRotation : homeRotation;
+            Vector3 direction = Quaternion.Inverse(rotation) * (collider.bounds.center - overview);
+            float height = Mathf.Max(.01f, direction.z) * Mathf.Tan(homeFieldOfView * .5f * Mathf.Deg2Rad);
+            Vector2 bias = new Vector2(Mathf.Clamp(direction.x / (height * viewCamera.aspect), -1, 1),
+                Mathf.Clamp(direction.y / height, -1, 1)) * target.HoverStrength;
+            Vector3 offset = new Vector3(bias.x * hoverTravel.x, bias.y * hoverTravel.y,
+                hoverForwardTravel * target.HoverStrength) + target.HoverPositionOffset;
+            Vector2 angles = new Vector2(-bias.y * hoverDegrees.y, bias.x * hoverDegrees.x) + target.HoverRotationOffset;
+            Quaternion destinationRotation = Quaternion.AngleAxis(angles.y, Vector3.up) * rotation
+                * Quaternion.AngleAxis(angles.x, Vector3.right);
+            look.MoveToHoverPose(overview + rotation * offset, destinationRotation, hoverTransitionDuration);
+        }
+
+        private bool WithinHoverMargin(Vector2 pointer)
+        {
+            Bounds bounds = lockCollider.bounds;
+            Vector2 minimum = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+            Vector2 maximum = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+            for (int i = 0; i < 8; i++)
+            {
+                Vector3 corner = bounds.center + Vector3.Scale(bounds.extents,
+                    new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                Vector3 screen = viewCamera.WorldToScreenPoint(corner);
+                if (screen.z <= viewCamera.nearClipPlane) return false;
+                minimum = Vector2.Min(minimum, screen);
+                maximum = Vector2.Max(maximum, screen);
+            }
+            float padding = Mathf.Max(0, hoverExitPadding);
+            return pointer.x >= minimum.x - padding && pointer.x <= maximum.x + padding &&
+                pointer.y >= minimum.y - padding && pointer.y <= maximum.y + padding;
+        }
+
+        private void ClearMagneticHover()
+        {
+            if (look) look.ReleaseHover(hoverReturnDuration);
+            lockTarget = null;
+            lockCollider = null;
+            hoverExitElapsed = 0;
+        }
+
         private void OnDisable()
         {
             SetHover(null);
+            ClearMagneticHover();
             if (!HasCameraControl) return;
             transform.localPosition = homePosition;
             transform.localRotation = homeRotation;

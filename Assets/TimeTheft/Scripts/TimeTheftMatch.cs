@@ -2,13 +2,16 @@ using System;
 
 namespace TimeTheft
 {
-    public enum RoundStage { Dealing, Selecting, Inspecting, Deciding, Revealing, Exchanging, Settling, RoundComplete, GameOver }
+    public enum RoundStage { Dealing, Selecting, Inspecting, Deciding, Revealing, Exchanging, Settling, RoundComplete, GameOver, SelectingAi, Allocating }
     public enum ClockAction { Keep, Swap }
     public enum MatchWinner { None, Player, Ai, Draw }
 
     public static class PrototypePolicy
     {
-        // 임시 정책의 변경 지점: 선생성·플레이어 선선택·비공개 폐기.
+        // 최초 선공 결정 방식은 미정. 기존 플레이어 선공을 한 게임의 임시 정책으로 유지한다.
+        public static bool PlayerStartsMatch => true;
+
+        // 값 선생성·분포·비공개 폐기는 기존 임시 정책을 유지한다.
         public static int[] GenerateClocks(PrototypeRules rules, Random random)
         {
             return new[] { random.Next(rules.MinimumValue, rules.MaximumValue + 1),
@@ -18,7 +21,7 @@ namespace TimeTheft
 
         public static int SelectAiClock(int playerIndex, Random random)
         {
-            int choice = random.Next(2);
+            int choice = random.Next(playerIndex < 0 ? 3 : 2);
             for (int i = 0; i < 3; i++)
                 if (i != playerIndex && choice-- == 0) return i;
             throw new InvalidOperationException();
@@ -50,6 +53,7 @@ namespace TimeTheft
     {
         private readonly PrototypeRules rules;
         private readonly Random random;
+        private readonly bool playerStarts;
         private int[] clocks = new int[3];
         public RoundStage Stage { get; private set; }
         public int Round { get; private set; }
@@ -59,7 +63,8 @@ namespace TimeTheft
         public int Award { get; private set; }
         public int PlayerClock { get; private set; } = -1;
         public int AiClock { get; private set; } = -1;
-        public int DiscardedClock => 3 - PlayerClock - AiClock;
+        public bool PlayerSelectsFirst => (Round % 2 == 1) == playerStarts;
+        public int DiscardedClock => PlayerClock < 0 || AiClock < 0 ? -1 : 3 - PlayerClock - AiClock;
         public int PlayerValue => clocks[PlayerClock];
         public int AiValue => clocks[AiClock];
         public int PlayerLoss { get; private set; }
@@ -76,6 +81,7 @@ namespace TimeTheft
                 throw new ArgumentException("수명과 시계 값 범위를 확인하세요.");
             this.rules = rules;
             this.random = random;
+            playerStarts = PrototypePolicy.PlayerStartsMatch;
             PlayerLife = AiLife = rules.InitialLife;
             Stage = RoundStage.RoundComplete;
         }
@@ -91,14 +97,32 @@ namespace TimeTheft
             return true;
         }
 
-        public bool OpenSelection() => Advance(RoundStage.Dealing, RoundStage.Selecting);
+        public bool OpenSelection() => Advance(RoundStage.Dealing,
+            PlayerSelectsFirst ? RoundStage.Selecting : RoundStage.SelectingAi);
+
+        public bool CanSelectClock(int index) => Stage == RoundStage.Selecting &&
+            index >= 0 && index < 3 && index != AiClock && PlayerClock < 0;
 
         public bool SelectClock(int index)
         {
-            if (Stage != RoundStage.Selecting || index < 0 || index > 2) return false;
+            if (!CanSelectClock(index)) return false;
             PlayerClock = index;
-            AiClock = PrototypePolicy.SelectAiClock(index, random);
-            Stage = RoundStage.Inspecting;
+            Stage = RoundStage.Allocating;
+            return true;
+        }
+
+        public bool SelectAiClock()
+        {
+            if (Stage != RoundStage.SelectingAi || AiClock >= 0) return false;
+            AiClock = PrototypePolicy.SelectAiClock(PlayerClock, random);
+            Stage = RoundStage.Allocating;
+            return true;
+        }
+
+        public bool CompleteAllocation()
+        {
+            if (Stage != RoundStage.Allocating) return false;
+            Stage = PlayerClock < 0 ? RoundStage.Selecting : AiClock < 0 ? RoundStage.SelectingAi : RoundStage.Inspecting;
             return true;
         }
 
