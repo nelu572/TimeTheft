@@ -16,9 +16,13 @@
 
 | 경로 | 현재 역할 |
 | --- | --- |
-| `Assets/Scenes/SampleScene.unity` | 빌드 진입 씬. 카메라·조명과 프로토타입의 고정 UI·EventSystem·시계 배치 기준점을 씬에서 관리한다. |
+| `Assets/Scenes/SampleScene.unity` | 기존 uGUI 프로토타입. 고정 UI·EventSystem·시계 배치 기준점을 보존하며 현재 빌드에서는 비활성화한다. |
 | `Assets/Scenes/TabletopStudy.unity` | 2.5D 공간·카메라 검증용 별도 씬. 게임 로직과 연결하지 않았으며 빌드 씬 목록에도 추가하지 않았다. |
-| `Assets/Scenes/TabletopGame.unity` | 2.5D 오브젝트를 클릭하여 실제 게임을 진행하는 플레이 씬. Editor에서 이 씬을 열고 Play한다. 기존 빌드 진입 씬은 유지한다. |
+| `Assets/Scenes/TabletopGame.unity` | 기존 2.5D 프로토타입·회귀 검증용 씬. T3 테이블 적용 상태를 보존하며 메인 개발을 위해 무분별하게 수정하지 않는다. |
+| `Assets/Scenes/TimeTheftGame.unity` | 실제 게임의 메인 통합 씬이자 빌드 진입 씬. 앞으로 게임 화면·플레이·연출 검증과 완성된 요소 통합은 이 씬을 기준으로 진행한다. |
+| `Assets/Scenes/CounterStructureStudy.unity` | 통합 시간 계수기의 독립 제작·실험 씬. 게임 진행과 분리된 고정 표시값을 사용한다. |
+| `Assets/TimeTheft/Table/Prefabs/TimeTheft_Table_T3.prefab` | 기존 UV와 청흑색 펠트·흑갈색 목재 픽셀 텍스처를 사용하는 T3 테이블. 메시 9개를 분리한 구조이며 현재 아트는 잠정 완료다. |
+| `Assets/TimeTheft/Counter/IntegratedTimeCounter.prefab` | Bank·Player·Opponent 표시부를 결합한 기준 계수기. 메인 씬 인스턴스의 TMP 표시부를 기존 View에 연결한다. |
 | `Assets/TimeTheft/Scripts/` | 게임 규칙, 진행, 화면 표현과 설정 코드를 보관한다. |
 | `Assets/TimeTheft/Prefabs/Clock.prefab` | 교체 가능한 시계 표시 프리팹. 실행 시 `TableView`가 3개를 생성하고 라운드·새 게임에서 재사용한다. |
 | `Assets/TimeTheft/Prefabs/TabletopClock.prefab` | 월드 시계·임시 개폐 뚜껑·공개 바늘·소유 표시·봉인 패/회전 교환 장치. 플레이 씬에 3개를 미리 배치하고 재사용한다. |
@@ -34,17 +38,28 @@
 
 구조와 버전이 바뀌면 실제 파일을 기준으로 이 내용을 갱신한다. 아직 없는 게임 아키텍처를 전제로 작업하지 않는다.
 
-고정 화면은 `SampleScene`의 `TimeTheft Prototype/TimeTheftCanvas/Table`에서 편집한다. `Slots` 아래의 `DealSlot0~2`, `PlayerSlot`, `AiSlot`, `DiscardSlot`은 시계 이동의 기준점이며, 시계는 같은 테이블의 `ClockRoot` 아래에 생성된다. `TableView`의 Inspector 참조를 유지하고, 고정 UI를 런타임에 다시 생성하지 않는다. 기존 uGUI 프로토타입은 보존하고 월드 UX는 별도 `TabletopGame` 씬에서 작업한다.
+### 씬 개발 기준
+
+- 실제 게임에 적용하는 작업은 기본적으로 `TimeTheftGame`에서 진행한다. 특정 오브젝트·시스템의 독립 제작과 실험은 별도 Study 씬을 사용할 수 있다.
+- 완성된 요소는 메인 씬에 통합하고 실제 플레이 흐름에서 검증한다. 기존 프로토타입·회귀 테스트·제작용 씬은 각 목적에 따라 보존한다.
+- 기존 `TimeTheftMatch`·Controller·View·카메라·입력 시스템을 재사용하며 새 씬을 위한 중복 진행 시스템을 만들지 않는다. 기존 프로토타입 전용 테스트도 유지한다.
+- 메인 씬에는 T3 테이블, 왼쪽 옆변 중앙의 통합 시간 계수기, 임시 회중시계 3개, 선택·유지/교환·공개·정산·결과/재시작, 자유 시차와 Focus를 연결한다.
+- 통합 계수기는 기존 정수 시간 값을 `HH:00`으로 표시한다. View의 `Use Hours Minutes Display`를 켜면 고유 Player/Opponent 색상을 유지한다. 분 단위 게임 규칙이나 새 타이머를 추가한 것은 아니다. 기존 프로토타입은 `h` 표시를 유지한다.
+- 메인 Hierarchy는 `Environment`(테이블·도움말·결과), `Devices`(통합 계수기·라운드 표시), `ClockSlots`, `Opponent`, `CameraRig`, `Lighting`, `TimeTheftGame`(진행·View·배분 목적지), `Decision UI`·`EventSystem`, `Round Feedback`으로 구분한다. 비활성 `ItemSlots`는 기존 배치 샘플이며 아이템 기능이 아니다.
+- 아직 미완성인 요소는 회중시계 최종 아트·애니메이션, 상대 캐릭터·행동, 아이템 시스템, 테이블 개폐, 최종 컷씬·결과 연출·사운드·VFX다. 필요해질 때 통합하며 빈 시스템을 미리 만들지 않는다.
+- Editor에서는 `TimeTheftGame`을 열어 Play한다. Build Settings는 이 씬을 첫 활성 씬으로 두며, 기존 `SampleScene` 항목은 비활성으로 보존한다.
+
+고정 화면은 `SampleScene`의 `TimeTheft Prototype/TimeTheftCanvas/Table`에서 편집한다. `Slots` 아래의 `DealSlot0~2`, `PlayerSlot`, `AiSlot`, `DiscardSlot`은 시계 이동의 기준점이며, 시계는 같은 테이블의 `ClockRoot` 아래에 생성된다. `TableView`의 Inspector 참조를 유지하고, 고정 UI를 런타임에 다시 생성하지 않는다. 기존 uGUI 프로토타입과 `TabletopGame`은 보존하고 실제 게임의 월드 UX는 `TimeTheftGame`에서 작업한다.
 
 2.5D 배치는 `TabletopStudy`에서 편집한다. `Environment/Table`, `Opponent`, `ClockSlots`, `Devices`, `ItemSlots`는 모두 씬에 직접 배치된 임시 표시이며 런타임에 생성하거나 게임 수치를 갱신하지 않는다. 시계는 테이블에 눕혀 배치하고, 계수기는 가장자리에 브래킷으로 고정한 케이스, 왼쪽 시간 보관 장치는 안쪽을 향한 독립 캐비닛으로 구성한다. 장치의 `Face` 아래 스프라이트·정적 텍스트는 가독성 검증용이며 게임 데이터와 연결하지 않았다. 기본 구도는 `CameraRig` Transform과 자식 Camera의 FOV에서, 마우스 추적은 `TabletopCameraLook`의 Strength·Horizontal/Vertical Degrees·Horizontal/Vertical Travel·Response에서 조절한다. 기본값은 16:9, Perspective FOV 58°, 하향 34°이며 좌우 ±7°·상하 ±4.5° 회전과 CameraRig 로컬 XY 기준 좌우 ±0.22·상하 ±0.12 단위 이동을 함께 보간한다(Response 6). 시계와 장치는 고정 월드 방향을 유지하며 카메라를 따라 회전하지 않는다. SortingGroup으로 각 오브젝트 내부 표시 순서를 묶었다.
 
 테스트 씬의 `TabletopFocusCamera`는 호버 색상 강조와 클릭 집중, 우클릭·Esc 복귀만 담당한다. `TabletopFocusTarget`은 시계 3개, 왼쪽 보관 장치, `PlayerItemSlot2`의 임시 물건에 연결되어 있다. 각 대상 자식 `FocusPoint`의 위치·회전(파란 Z축이 시선), 대상 컴포넌트의 Transition Duration·Override Field Of View·Field Of View와 카메라 컴포넌트의 Return Duration을 Inspector에서 편집한다. 집중·복귀 중에는 기본 마우스 추적을 중단하고, 복귀가 끝난 뒤 기존 기준 구도에서 재개한다. 모든 장치를 기본 시점에서 읽도록 강제하지 않으며, 측면 장치는 집중 시점에서 가독성을 확인한다. 픽셀 해상도·PPU 확정과 실제 UX·게임 로직 연결은 후속 단계다.
 
-`TabletopGame`에서는 시계를 한 번 클릭하여 선택하고, 해당 시계 옆의 유지/교환 조작부를 클릭하여 기존 행동을 확정한다. `TabletopGame` 루트의 View Inspector에서 시계 3개·카메라·수명 계수기·판돈 보관 장치·작은 라운드 표시·도움말·종료 결과 전표 참조를 관리한다. 수치는 월드 TextMeshPro로 표시하며 일반 HUD Canvas는 사용하지 않는다. 선택 가능·소유·공개 상태는 시계 색상과 짧은 소유 표시로 구분하고 폐기 시계는 숨긴다. 게임 값은 `TimeTheftMatch`만 소유하며 View는 공개 시점에 전달받은 값만 표시한다. 카메라 전환 완료가 규칙 진행 조건은 아니며 전환 중 마우스 입력만 제한한다. 집중 중 월드 조작부 입력은 플레이 씬의 Allow Input While Focused에서 허용한다. 시계 선택·유지/교환·다시하기 대상의 Focus On Click은 끄고 Clicked 이벤트로 연결하며, 장치 열람은 기존 집중 동작을 사용한다. 큰 중앙 안내판과 상시 새 게임 조작부는 없다. 최초 선택 전에는 작은 조작 안내 카드가 보이고 선택하면 닫히며 H로 다시 열거나 닫는다. 라운드 번호는 Time Bank의 작은 표시로, 진행 단계는 선택 강조·선택 물건의 등장·시계 공개·계수기 변화로 전달한다. 우클릭/Esc로 전체 시점 복귀, Space로 진행 대기 단축, R로 새 게임을 시작한다. 최종 판돈 지급이 완료되면 결과 전표와 다시하기 봉인 패만 표시한다.
+`TimeTheftGame`과 `TabletopGame`은 같은 월드 Controller·View를 재사용한다. 시계를 한 번 클릭해 선택하고 배분한 뒤, 결정 단계에만 나타나는 화면 하단의 작은 `TabletopDecisionUI`에서 유지/교환을 확정한다. 각 씬의 게임 루트 View Inspector에서 시계 3개·카메라·숫자 표시부·라운드·도움말·결과 전표·결정 UI·라운드 피드백을 연결한다. 수치 표시는 월드 TextMeshPro이며, 메인 씬만 통합 계수기의 TMP 세 개를 사용한다. 게임 값은 `TimeTheftMatch`만 소유하고 View가 공개·이동·정산 표시를 담당한다. 시계 선택·다시하기는 기존 Clicked 콜백, 계수기 열람은 기존 Focus를 재사용한다. 카메라 완료는 규칙 진행 조건이 아니며 전환 중 클릭은 제한한다. H 도움말, 우클릭/Esc 전체 시점 복귀, Space 대기 단축, R 재시작과 결과 전표는 공통 구현을 유지한다.
 
 플레이 씬의 `ItemSlots`는 기본 비활성화된 배치 검증 영역이다. Inspector에서 켜면 `PlayerItems`와 `OpponentItems` 아래 각 배치 기준점의 `LayoutSample`을 비교할 수 있다. 현재 양측 3개씩의 서로 다른 임시 실루엣을 배치했으나 보유 수량 규칙은 아니다. 원형 용기·주머니·열쇠형 도구·병 거치대·실패·꺾인 도구는 기본 도형과 평면 스프라이트로 구성하며 크기·회전·접지 그림자를 직접 편집한다. 슬롯 테두리와 샘플 입력·Collider는 없으며 게임 효과는 없다. 빈 위치는 테이블 표면으로 남는다. `TabletopStudy`의 공간 검증 환경은 별도로 보존한다.
 
-유지/교환 입력은 기존 Clicked 이벤트와 Match.CommitAction을 재사용한다. 시계 프리팹의 각 `DecisionControls/Keep`·`Swap`에는 봉인 패와 회전 화살표 장치를 배치한다. `TabletopDecisionObject`는 아트의 출입·호버 상승·누름/회전만 담당하고 게임 규칙은 알지 못한다. 결정 즉시 Collider와 입력을 막고 짧게 퇴장하며, 다음 라운드·재시작 시 아트와 장치 자세를 복구한다. 배치와 반응 강도·시간은 Inspector에서 편집한다.
+유지/교환 입력은 `TabletopDecisionUI`에서 기존 Controller·Match.CommitAction으로 전달한다. 시계 프리팹에 남아 있는 `DecisionControls/Keep`·`Swap`과 `TabletopDecisionObject`는 과거 월드 장치 구현이며 현재 플레이 씬에서는 입력을 열지 않는다. 새 씬에 별도의 결정 시스템이나 중복 월드 조작부를 만들지 않는다.
 
 시계의 `Visual` 자식만 호버·선택 상승과 짧은 행동 반응을 수행한다. 선택 물건의 `DecisionControls`는 `Visual` 밖에 두어 시계 상승에 끌려가지 않고 테이블 위에 놓인다. `FocusPoint`와 시계 선택 Collider는 루트에 남겨 미세 연출이 집중 시점을 흔들지 않게 한다. `TabletopClockView`의 Hover/Selected Lift·Motion Response·Reveal/Action Duration·Lid Open Degrees·Pulse Scale은 Inspector에서 조절한다. 숫자와 바늘은 기존 공개 호출에서만 활성화하고 임시 뚜껑 개폐를 덧붙인다. 실제 교환은 기존 코루틴에서 View.ExchangeFrame을 호출해 두 물리 시계의 루트 위치를 교체하며, 물리 ID와 게임의 소유 인덱스를 구별한다. View의 Exchange Arc·Exchange Lift로 궤적을 조절한다. 다음 분배·재시작에는 처음 배치로 복구한다.
 
