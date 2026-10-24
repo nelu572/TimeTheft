@@ -1,0 +1,4 @@
+{
+  "name": "TimeTheft.CounterStudy",
+  "references": ["TimeTheft.Runtime", "Unity.TextMeshPro", "Unity.InputSystem"]
+}
