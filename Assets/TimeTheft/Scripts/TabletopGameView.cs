@@ -14,6 +14,8 @@ namespace TimeTheft
         [SerializeField] private TabletopRoundFeedback roundFeedback;
         [Header("씬에 배치한 계수기와 보관 장치")]
         [SerializeField] private TextMeshPro playerLife, aiLife, pot;
+        [Tooltip("통합 계수기의 HH:00 표시와 Player/Opponent 고유 색상을 유지한다. 규칙 값은 기존 시간 단위 정수다.")]
+        [SerializeField] private bool useHoursMinutesDisplay;
         [SerializeField] private TabletopFocusTarget[] inspectionTargets;
         [Header("종료 시에만 표시하는 결과 전표·다시하기")]
         [SerializeField] private TextMeshPro status, detail, restartLabel;
@@ -73,7 +75,7 @@ namespace TimeTheft
 
         public void Initialize(Action<int> select, Action<ClockAction> choose, Action newGame)
         {
-            if (clocks == null || clocks.Length != 3 || !focusCamera || !decisionUI || !roundFeedback || !playerLife || !aiLife || !pot || !status || !detail || !restart || !restartLabel || !playerIndicator || !aiIndicator || !potIndicator || !resultDisplay || !roundLabel || !helpCard)
+            if (clocks == null || clocks.Length != 3 || !focusCamera || !decisionUI || !roundFeedback || !playerLife || !aiLife || !pot || !status || !detail || !restart || !restartLabel || !resultDisplay || !roundLabel || !helpCard)
                 throw new InvalidOperationException("TabletopGameView의 시계·장치·결과 전표·도움말 참조를 연결하세요.");
             if (!playerClockSlot || !aiClockSlot || !discardClockSlot)
                 throw new InvalidOperationException("시계 배분 목적지 3개를 연결하세요.");
@@ -91,9 +93,9 @@ namespace TimeTheft
                 playerNumberScale = playerLife.transform.localScale;
                 aiNumberScale = aiLife.transform.localScale;
                 potNumberScale = pot.transform.localScale;
-                playerIndicatorColor = playerIndicator.color;
-                aiIndicatorColor = aiIndicator.color;
-                potIndicatorColor = potIndicator.color;
+                playerIndicatorColor = playerIndicator ? playerIndicator.color : Color.white;
+                aiIndicatorColor = aiIndicator ? aiIndicator.color : Color.white;
+                potIndicatorColor = potIndicator ? potIndicator.color : Color.white;
             }
             initialized = true;
         }
@@ -335,17 +337,23 @@ namespace TimeTheft
             shownAi = ai;
             shownPot = stake;
             if (!playerLife || !aiLife || !pot) return;
-            playerLife.text = player + "h";
-            aiLife.text = ai + "h";
-            pot.text = stake + "h";
-            playerLife.color = player <= 12 ? TableView.AiColor : TableView.Cream;
-            aiLife.color = ai <= 12 ? TableView.AiColor : TableView.Cream;
+            playerLife.text = FormatTime(player);
+            aiLife.text = FormatTime(ai);
+            pot.text = FormatTime(stake);
+            if (!useHoursMinutesDisplay)
+            {
+                playerLife.color = player <= 12 ? TableView.AiColor : TableView.Cream;
+                aiLife.color = ai <= 12 ? TableView.AiColor : TableView.Cream;
+            }
         }
+
+        private string FormatTime(int hours) => useHoursMinutesDisplay ? hours.ToString("00") + ":00" : hours + "h";
 
         private void NumberFeedback(TextMeshPro number, SpriteRenderer indicator, Vector3 scale, Color color, float pulse)
         {
-            if (!number || !indicator) return;
+            if (!number) return;
             number.transform.localScale = scale * (1 + numberPulseScale * pulse);
+            if (!indicator) return;
             Color bright = color * indicatorBrightness;
             bright.a = color.a;
             indicator.color = Color.Lerp(color, bright, pulse);
