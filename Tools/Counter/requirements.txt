@@ -1,0 +1,3 @@
+# Reproduce the approved PNG encoding and NumPy raster calculations.
+numpy==2.3.5
+Pillow==12.3.0
