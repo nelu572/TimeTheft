@@ -1,0 +1,139 @@
+{
+  "name": "CounterPixelSegments",
+  "pointSize": 16,
+  "ascent": 14,
+  "descent": -2,
+  "cap": 14,
+  "glyphs": [
+    {
+      "unicode": 32,
+      "x": 2,
+      "y": 126,
+      "width": 0,
+      "height": 0,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 45,
+      "x": 18,
+      "y": 112,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 48,
+      "x": 34,
+      "y": 112,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 49,
+      "x": 50,
+      "y": 112,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 50,
+      "x": 66,
+      "y": 112,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 51,
+      "x": 82,
+      "y": 112,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 52,
+      "x": 98,
+      "y": 112,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 53,
+      "x": 114,
+      "y": 112,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 54,
+      "x": 2,
+      "y": 92,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 55,
+      "x": 18,
+      "y": 92,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 56,
+      "x": 34,
+      "y": 92,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 57,
+      "x": 50,
+      "y": 92,
+      "width": 9,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 11
+    },
+    {
+      "unicode": 58,
+      "x": 66,
+      "y": 92,
+      "width": 3,
+      "height": 14,
+      "bearingX": 0,
+      "bearingY": 14,
+      "advance": 5
+    }
+  ]
+}
