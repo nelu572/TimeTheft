@@ -107,3 +107,7 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Counter production tools
+/Tools/**/__pycache__/
+/Tools/**/*.pyc

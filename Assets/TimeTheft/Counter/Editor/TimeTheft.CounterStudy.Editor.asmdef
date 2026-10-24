@@ -1,0 +1,5 @@
+{
+  "name": "TimeTheft.CounterStudy.Editor",
+  "references": ["TimeTheft.CounterStudy", "TimeTheft.Runtime", "Unity.TextMeshPro"],
+  "includePlatforms": ["Editor"]
+}
