@@ -1,188 +1,253 @@
 using System;
+using System.Collections.Generic;
 
 namespace TimeTheft
 {
-    public enum RoundStage { Dealing, Selecting, Inspecting, Deciding, Revealing, Exchanging, Settling, RoundComplete, GameOver, SelectingAi, Allocating }
-    public enum ClockAction { Keep, Swap }
-    public enum MatchWinner { None, Player, Ai, Draw }
+    public enum Participant { Player, Ai }
+    public enum TimeAction { Collect, Ration }
+    public enum ClockKind { Normal, Red }
+    public enum TurnStage { BatchComplete, BatchPreview, Shuffling, AwaitingAction, Revealing, Settling, GameOver, AwaitingClock }
+    public enum GameWinner { None, Player, Ai }
+    public enum ClockVisibility { Hidden, Open, Used, Discarded }
 
-    public static class PrototypePolicy
+    public static class GameTime
     {
-        // 최초 선공 결정 방식은 미정. 기존 플레이어 선공을 한 게임의 임시 정책으로 유지한다.
-        public static bool PlayerStartsMatch => true;
+        public const int MinutesPerHour = 60;
+        public const int RationMinutesPerHour = 20;
 
-        // 값 선생성·분포·비공개 폐기는 기존 임시 정책을 유지한다.
-        public static int[] GenerateClocks(PrototypeRules rules, Random random)
+        public static string Format(int minutes)
         {
-            return new[] { random.Next(rules.MinimumValue, rules.MaximumValue + 1),
-                random.Next(rules.MinimumValue, rules.MaximumValue + 1),
-                random.Next(rules.MinimumValue, rules.MaximumValue + 1) };
-        }
-
-        public static int SelectAiClock(int playerIndex, Random random)
-        {
-            int choice = random.Next(playerIndex < 0 ? 3 : 2);
-            for (int i = 0; i < 3; i++)
-                if (i != playerIndex && choice-- == 0) return i;
-            throw new InvalidOperationException();
-        }
-
-        public static int ActualLoss(int life, int clockValue) => Math.Min(life, clockValue);
-        public static MatchWinner DetermineWinner(int playerLife, int aiLife)
-        {
-            if (playerLife == 0 && aiLife == 0) return MatchWinner.Draw;
-            if (playerLife == 0) return MatchWinner.Ai;
-            if (aiLife == 0) return MatchWinner.Player;
-            return MatchWinner.None;
+            if (minutes < 0) throw new ArgumentOutOfRangeException(nameof(minutes));
+            return (minutes / MinutesPerHour).ToString("00") + ":" + (minutes % MinutesPerHour).ToString("00");
         }
     }
 
-    public static class ClockAi
+    public readonly struct ClockFace
     {
-        // 자신의 값만 받는다. 상대/폐기 시계와 Match에 접근할 수 없다.
-        public static ClockAction Decide(int ownValue, PrototypeRules rules, Random random)
+        public int Hours { get; }
+        public ClockKind Kind { get; }
+        public ClockFace(int hours, ClockKind kind) { Hours = hours; Kind = kind; }
+    }
+
+    public readonly struct ClockState
+    {
+        public ClockVisibility Visibility { get; }
+        public ClockFace? Face { get; }
+        public ClockState(ClockVisibility visibility, ClockFace? face) { Visibility = visibility; Face = face; }
+    }
+
+    // 위치·순서·숨은 시계 참조를 포함하지 않는 공개 정보만 AI에 전달한다.
+    public readonly struct AiObservation
+    {
+        public int OwnLifeMinutes { get; }
+        public int OpponentLifeMinutes { get; }
+        public int BankMinutes { get; }
+        public int NormalCount { get; }
+        public int RedCount { get; }
+        public int NormalHours { get; }
+        public int RedHours { get; }
+        public AiObservation(int ownLifeMinutes, int opponentLifeMinutes, int bankMinutes, int normalCount, int redCount, int normalHours, int redHours)
         {
-            float range = Math.Max(1, rules.MaximumValue - rules.MinimumValue);
-            float t = (ownValue - rules.MinimumValue) / range;
-            double probability = rules.AiSwapAtMinimum + (rules.AiSwapAtMaximum - rules.AiSwapAtMinimum) * t;
-            return random.NextDouble() < probability ? ClockAction.Swap : ClockAction.Keep;
+            OwnLifeMinutes = ownLifeMinutes; OpponentLifeMinutes = opponentLifeMinutes; BankMinutes = bankMinutes;
+            NormalCount = normalCount; RedCount = redCount; NormalHours = normalHours; RedHours = redHours;
         }
     }
 
+    public static class TimeTheftAi
+    {
+        // 후보의 위치 ID만 받는다. 비공개 숫자·종류와 무관하게 균등 선택한다.
+        public static int SelectClock(IReadOnlyList<int> availableIndices, Random random)
+        {
+            if (availableIndices == null || random == null) throw new ArgumentNullException();
+            if (availableIndices.Count == 0) throw new ArgumentException("선택할 시계가 없습니다.");
+            return availableIndices[random.Next(availableIndices.Count)];
+        }
+
+        // 공개된 종류별 평균으로 분 단위 수명 우위 변화를 추정한다. 실제 정산은 모델의 정수 연산뿐이다.
+        public static TimeAction Decide(AiObservation info, double riskTolerance, Random random)
+        {
+            if (random == null) throw new ArgumentNullException(nameof(random));
+            if (info.BankMinutes == 0) return TimeAction.Collect;
+            double count = Math.Max(1, info.NormalCount + info.RedCount);
+            double normalHours = (double)info.NormalHours / Math.Max(1, info.NormalCount);
+            double redHours = (double)info.RedHours / Math.Max(1, info.RedCount);
+            double collect = (info.NormalCount * Math.Min(info.OpponentLifeMinutes, normalHours * GameTime.MinutesPerHour)
+                - info.RedCount * Math.Min(info.OwnLifeMinutes, redHours * GameTime.MinutesPerHour)) / count;
+            // 빨간 배급은 상대에게 지급하므로 이득에서 뺀다. Bank 부족도 종류별로 반영한다.
+            double ration = (info.NormalCount * Math.Min(info.BankMinutes, normalHours * GameTime.RationMinutesPerHour)
+                - info.RedCount * Math.Min(info.BankMinutes, redHours * GameTime.RationMinutesPerHour)) / count;
+            double danger = info.OwnLifeMinutes < info.OpponentLifeMinutes ? 0.15 : 0;
+            double scale = Math.Max(GameTime.MinutesPerHour, Math.Max(Math.Abs(collect), Math.Abs(ration)));
+            double probability = Math.Max(.05, Math.Min(.95, .5 + (collect - ration) / (2 * scale) + riskTolerance - .5 - danger));
+            return random.NextDouble() < probability ? TimeAction.Collect : TimeAction.Ration;
+        }
+    }
+
+    // 수치와 상태의 유일한 소유자. Unity 오브젝트나 특정 시계 모델을 알지 못한다.
     public sealed class TimeTheftMatch
     {
-        private readonly PrototypeRules rules;
+        public const int ClocksPerBatch = 5;
+        public const int TurnsPerBatch = 4;
+        public const int InitialContributionMinutes = 10 * GameTime.MinutesPerHour;
+        private readonly GameRules rules;
         private readonly Random random;
-        private readonly bool playerStarts;
-        private int[] clocks = new int[3];
-        public RoundStage Stage { get; private set; }
-        public int Round { get; private set; }
-        public int PlayerLife { get; private set; }
-        public int AiLife { get; private set; }
-        public int Pot { get; private set; }
-        public int Award { get; private set; }
-        public int PlayerClock { get; private set; } = -1;
-        public int AiClock { get; private set; } = -1;
-        public bool PlayerSelectsFirst => (Round % 2 == 1) == playerStarts;
-        public int DiscardedClock => PlayerClock < 0 || AiClock < 0 ? -1 : 3 - PlayerClock - AiClock;
-        public int PlayerValue => clocks[PlayerClock];
-        public int AiValue => clocks[AiClock];
-        public int PlayerLoss { get; private set; }
-        public int AiLoss { get; private set; }
-        public ClockAction PlayerAction { get; private set; }
-        public ClockAction AiAction { get; private set; }
-        public bool DidExchange => PlayerAction != AiAction;
-        public MatchWinner Winner { get; private set; }
+        private readonly ClockFace[] clocks = new ClockFace[ClocksPerBatch];
+        private readonly bool[] used = new bool[ClocksPerBatch];
+        private int normalCount, redCount, normalHours, redHours;
 
-        public TimeTheftMatch(PrototypeRules rules, Random random)
+        public TurnStage Stage { get; private set; } = TurnStage.BatchComplete;
+        public Participant ActiveParticipant { get; private set; }
+        public int PlayerLifeMinutes { get; private set; }
+        public int AiLifeMinutes { get; private set; }
+        public int BankMinutes { get; private set; }
+        public int Batch { get; private set; }
+        public int Turn { get; private set; } = 1;
+        public int UsedCount { get; private set; }
+        public int DiscardedCount { get; private set; }
+        public int CurrentClock { get; private set; } = -1;
+        public TimeAction Action { get; private set; }
+        public int TransferredMinutes { get; private set; }
+        public Participant TransferParticipant { get; private set; }
+        public GameWinner Winner { get; private set; }
+
+        public TimeTheftMatch(GameRules rules, Random random)
         {
-            if (rules == null || random == null) throw new ArgumentNullException();
-            if (rules.InitialLife < 1 || rules.MinimumValue < 1 || rules.MaximumValue > 12 || rules.MinimumValue > rules.MaximumValue)
-                throw new ArgumentException("수명과 시계 값 범위를 확인하세요.");
-            this.rules = rules;
+            if (rules == null) throw new ArgumentNullException(nameof(rules));
+            if (random == null) throw new ArgumentNullException(nameof(random));
+            rules.Validate();
+            this.rules = rules.Copy();
             this.random = random;
-            playerStarts = PrototypePolicy.PlayerStartsMatch;
-            PlayerLife = AiLife = rules.InitialLife;
-            Stage = RoundStage.RoundComplete;
+            PlayerLifeMinutes = AiLifeMinutes = rules.InitialLifeHours * GameTime.MinutesPerHour - InitialContributionMinutes;
+            BankMinutes = InitialContributionMinutes * 2;
+            ActiveParticipant = rules.FirstParticipant;
         }
 
-        public bool BeginRound()
+        public bool BeginBatch()
         {
-            if (Stage != RoundStage.RoundComplete || Winner != MatchWinner.None) return false;
-            clocks = PrototypePolicy.GenerateClocks(rules, random);
-            Round++;
-            PlayerClock = AiClock = -1;
-            PlayerLoss = AiLoss = 0;
-            Stage = RoundStage.Dealing;
-            return true;
-        }
-
-        public bool OpenSelection() => Advance(RoundStage.Dealing,
-            PlayerSelectsFirst ? RoundStage.Selecting : RoundStage.SelectingAi);
-
-        public bool CanSelectClock(int index) => Stage == RoundStage.Selecting &&
-            index >= 0 && index < 3 && index != AiClock && PlayerClock < 0;
-
-        public bool SelectClock(int index)
-        {
-            if (!CanSelectClock(index)) return false;
-            PlayerClock = index;
-            Stage = RoundStage.Allocating;
-            return true;
-        }
-
-        public bool SelectAiClock()
-        {
-            if (Stage != RoundStage.SelectingAi || AiClock >= 0) return false;
-            AiClock = PrototypePolicy.SelectAiClock(PlayerClock, random);
-            Stage = RoundStage.Allocating;
-            return true;
-        }
-
-        public bool CompleteAllocation()
-        {
-            if (Stage != RoundStage.Allocating) return false;
-            Stage = PlayerClock < 0 ? RoundStage.Selecting : AiClock < 0 ? RoundStage.SelectingAi : RoundStage.Inspecting;
-            return true;
-        }
-
-        public bool OpenDecision() => Advance(RoundStage.Inspecting, RoundStage.Deciding);
-
-        public bool CommitAction(ClockAction action)
-        {
-            if (Stage != RoundStage.Deciding || (action != ClockAction.Keep && action != ClockAction.Swap)) return false;
-            PlayerAction = action;
-            AiAction = ClockAi.Decide(AiValue, rules, random);
-            Stage = RoundStage.Revealing;
-            return true;
-        }
-
-        public bool ResolveExchange()
-        {
-            if (!Advance(RoundStage.Revealing, RoundStage.Exchanging)) return false;
-            if (DidExchange)
+            if (Stage != TurnStage.BatchComplete) return false;
+            UsedCount = DiscardedCount = 0;
+            CurrentClock = -1;
+            Array.Clear(used, 0, used.Length);
+            normalCount = redCount = normalHours = redHours = 0;
+            for (int i = 0; i < ClocksPerBatch; i++)
             {
-                int oldPlayer = PlayerClock;
-                PlayerClock = AiClock;
-                AiClock = oldPlayer;
+                var kind = i < 2 ? ClockKind.Normal : i == 2 ? ClockKind.Red :
+                    random.NextDouble() < rules.ExtraRedProbability ? ClockKind.Red : ClockKind.Normal;
+                clocks[i] = new ClockFace(rules.GenerateHours(random), kind);
+                if (kind == ClockKind.Normal) { normalCount++; normalHours += clocks[i].Hours; }
+                else { redCount++; redHours += clocks[i].Hours; }
             }
+            Shuffle();
+            Batch++;
+            Stage = TurnStage.BatchPreview;
+            return true;
+        }
+
+        public bool CloseAndShuffle()
+        {
+            if (Stage != TurnStage.BatchPreview) return false;
+            Stage = TurnStage.Shuffling;
+            Shuffle();
+            return true;
+        }
+
+        public bool CompleteShuffle()
+        {
+            if (Stage != TurnStage.Shuffling) return false;
+            Stage = TurnStage.AwaitingClock;
+            return true;
+        }
+
+        public bool CommitAction(Participant actor, TimeAction action)
+        {
+            if (Stage != TurnStage.AwaitingAction || actor != ActiveParticipant ||
+                (action != TimeAction.Collect && action != TimeAction.Ration)) return false;
+            Action = action;
+            TransferredMinutes = 0;
+            Stage = TurnStage.Revealing;
+            return true;
+        }
+
+        public bool CanSelectClock(Participant actor, int index) => Stage == TurnStage.AwaitingClock &&
+            actor == ActiveParticipant && index >= 0 && index < ClocksPerBatch && !used[index] && DiscardedCount == 0;
+
+        public int[] GetAvailableClockIndices()
+        {
+            var result = new List<int>(ClocksPerBatch - UsedCount);
+            if (Stage != TurnStage.AwaitingAction && Stage != TurnStage.AwaitingClock) return result.ToArray();
+            for (int i = 0; i < ClocksPerBatch; i++) if (!used[i]) result.Add(i);
+            return result.ToArray();
+        }
+
+        public bool SelectClock(Participant actor, int index)
+        {
+            if (!CanSelectClock(actor, index)) return false;
+            CurrentClock = index;
+            Stage = TurnStage.AwaitingAction;
             return true;
         }
 
         public bool Settle()
         {
-            if (!Advance(RoundStage.Exchanging, RoundStage.Settling)) return false;
-            PlayerLoss = PrototypePolicy.ActualLoss(PlayerLife, PlayerValue);
-            AiLoss = PrototypePolicy.ActualLoss(AiLife, AiValue);
-            PlayerLife -= PlayerLoss;
-            AiLife -= AiLoss;
-            Pot += PlayerLoss + AiLoss;
-            Winner = PrototypePolicy.DetermineWinner(PlayerLife, AiLife);
+            if (Stage != TurnStage.Revealing) return false;
+            ClockFace face = clocks[CurrentClock];
+            bool ration = Action == TimeAction.Ration;
+            bool self = ration ? face.Kind == ClockKind.Normal : face.Kind == ClockKind.Red;
+            TransferParticipant = self ? ActiveParticipant : Other(ActiveParticipant);
+            int requested = face.Hours * (ration ? GameTime.RationMinutesPerHour : GameTime.MinutesPerHour);
+            TransferredMinutes = Math.Min(requested, ration ? BankMinutes : LifeMinutes(TransferParticipant));
+            int change = ration ? TransferredMinutes : -TransferredMinutes;
+            if (TransferParticipant == Participant.Player) PlayerLifeMinutes += change;
+            else AiLifeMinutes += change;
+            BankMinutes -= change;
+            if (face.Kind == ClockKind.Normal) { normalCount--; normalHours -= face.Hours; }
+            else { redCount--; redHours -= face.Hours; }
+            used[CurrentClock] = true;
+            UsedCount++;
+            Winner = PlayerLifeMinutes == 0 ? GameWinner.Ai : AiLifeMinutes == 0 ? GameWinner.Player : GameWinner.None;
+            Stage = Winner == GameWinner.None ? TurnStage.Settling : TurnStage.GameOver;
             return true;
         }
 
-        public bool FinishRound()
+        public bool CompleteTurn()
         {
-            if (Stage != RoundStage.Settling) return false;
-            Stage = Winner == MatchWinner.None ? RoundStage.RoundComplete : RoundStage.GameOver;
-            if (Winner == MatchWinner.Player || Winner == MatchWinner.Ai)
+            if (Stage != TurnStage.Settling) return false;
+            ActiveParticipant = Other(ActiveParticipant);
+            Turn++;
+            CurrentClock = -1;
+            if (UsedCount == TurnsPerBatch)
             {
-                Award = Pot;
-                if (Winner == MatchWinner.Player) PlayerLife += Award;
-                else AiLife += Award;
-                Pot = 0;
+                DiscardedCount = 1;
+                Stage = TurnStage.BatchComplete;
             }
-            // 동시 탈락은 무승부. 획득자 없이 판돈을 결과에 남긴다.
+            else Stage = TurnStage.AwaitingClock;
             return true;
         }
 
-        public string DebugSnapshot() => $"{Stage} / ROUND {Round}\n시계 [ {string.Join(", ", clocks)} ]\n보유 인덱스 P:{PlayerClock} AI:{AiClock}\n행동 P:{PlayerAction} AI:{AiAction}\n수명 P:{PlayerLife} AI:{AiLife} / 판돈:{Pot} / 보상:{Award} / {Winner}";
-
-        private bool Advance(RoundStage expected, RoundStage next)
+        // 비공개/폐기 시계는 공개 API에서도 숫자·종류를 반환하지 않는다.
+        public ClockState GetClock(int index)
         {
-            if (Stage != expected) return false;
-            Stage = next;
-            return true;
+            if (index < 0 || index >= ClocksPerBatch) throw new ArgumentOutOfRangeException(nameof(index));
+            if (Stage == TurnStage.BatchPreview) return new ClockState(ClockVisibility.Open, clocks[index]);
+            if (index == CurrentClock && (Stage == TurnStage.Revealing || Stage == TurnStage.Settling || Stage == TurnStage.GameOver))
+                return new ClockState(ClockVisibility.Open, clocks[index]);
+            if (used[index]) return new ClockState(ClockVisibility.Used, null);
+            if (DiscardedCount == 1) return new ClockState(ClockVisibility.Discarded, null);
+            return new ClockState(ClockVisibility.Hidden, null);
+        }
+
+        public AiObservation Observe(Participant participant) => new AiObservation(LifeMinutes(participant), LifeMinutes(Other(participant)),
+            BankMinutes, normalCount, redCount, normalHours, redHours);
+
+        private int LifeMinutes(Participant participant) => participant == Participant.Player ? PlayerLifeMinutes : AiLifeMinutes;
+        private static Participant Other(Participant participant) => participant == Participant.Player ? Participant.Ai : Participant.Player;
+        private void Shuffle()
+        {
+            for (int i = clocks.Length - 1; i > 0; i--)
+            {
+                int j = random.Next(i + 1);
+                ClockFace old = clocks[i]; clocks[i] = clocks[j]; clocks[j] = old;
+            }
         }
     }
 }

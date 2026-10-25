@@ -1,3 +1,4 @@
+using TimeTheft.Legacy;
 using System;
 using System.Collections;
 using UnityEngine;
@@ -13,7 +14,7 @@ namespace TimeTheft
         private TableView view;
         private bool skipRequested;
         private bool firstDecision;
-        public TimeTheftMatch Match { get; private set; }
+        public LegacyMatch Match { get; private set; }
         public TableView View => view;
 
         private void Start()
@@ -36,7 +37,7 @@ namespace TimeTheft
             StopAllCoroutines();
             skipRequested = false;
             firstDecision = true;
-            Match = new TimeTheftMatch(settings.Rules, settings.RandomSeed == 0 ? new System.Random() : new System.Random(settings.RandomSeed));
+            Match = new LegacyMatch(settings.Rules, settings.RandomSeed == 0 ? new System.Random() : new System.Random(settings.RandomSeed));
             view.Actions(false);
             view.ResetTable(settings.Rules.InitialLife);
             StartCoroutine(Deal());

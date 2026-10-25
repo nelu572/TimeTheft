@@ -1,9 +1,11 @@
+using TimeTheft.Legacy;
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 
 namespace TimeTheft.Tests
 {
+    [Category("Legacy")]
     public sealed class MatchRulesTests
     {
         [TestCase(ClockAction.Keep, ClockAction.Keep, false)]
@@ -86,7 +88,7 @@ namespace TimeTheft.Tests
             for (int player = 0; player < 3; player++)
             for (int aiChoice = 0; aiChoice < 2; aiChoice++)
             {
-                var match = new TimeTheftMatch(new PrototypeRules(),
+                var match = new LegacyMatch(new PrototypeRules(),
                     new ScriptedRandom(new[] { 1, 6, 12 }, aiChoice));
                 Assert.That(match.BeginRound(), Is.True);
                 Assert.That(match.OpenSelection(), Is.True);
@@ -105,7 +107,7 @@ namespace TimeTheft.Tests
         [Test]
         public void FirstSelectionLocksUntilAllocatedAndInitiativeAlternatesEveryRound()
         {
-            var match = new TimeTheftMatch(new PrototypeRules { InitialLife = 30, MinimumValue = 1, MaximumValue = 1 },
+            var match = new LegacyMatch(new PrototypeRules { InitialLife = 30, MinimumValue = 1, MaximumValue = 1 },
                 new Random(481));
             for (int round = 1; round <= 3; round++)
             {
@@ -193,7 +195,7 @@ namespace TimeTheft.Tests
         [TestCase(30, 8, 7)]
         public void InvalidRuleBoundsAreRejected(int life, int minimum, int maximum)
         {
-            Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new PrototypeRules
+            Assert.Throws<ArgumentException>(() => new LegacyMatch(new PrototypeRules
             {
                 InitialLife = life, MinimumValue = minimum, MaximumValue = maximum
             }, new Random(1)));
@@ -202,7 +204,7 @@ namespace TimeTheft.Tests
         [Test]
         public void OutOfOrderDuplicateAndInvalidInputsDoNotMutateMatch()
         {
-            var match = new TimeTheftMatch(new PrototypeRules(), new Random(481));
+            var match = new LegacyMatch(new PrototypeRules(), new Random(481));
             RejectWithoutMutation(match, () => match.OpenSelection());
             RejectWithoutMutation(match, () => match.SelectClock(0));
             RejectWithoutMutation(match, () => match.SelectAiClock());
@@ -253,7 +255,7 @@ namespace TimeTheft.Tests
             for (int seed = 0; seed < 100; seed++)
             {
                 var rules = new PrototypeRules();
-                var match = new TimeTheftMatch(rules, new Random(seed));
+                var match = new LegacyMatch(rules, new Random(seed));
                 int lastPlayerLife = rules.InitialLife;
                 int lastAiLife = rules.InitialLife;
                 int lastPot = 0;
@@ -324,8 +326,8 @@ namespace TimeTheft.Tests
         public void SameSeedAndInputsReproduceWholeMatch()
         {
             var rules = new PrototypeRules();
-            var first = new TimeTheftMatch(rules, new Random(201026));
-            var second = new TimeTheftMatch(rules, new Random(201026));
+            var first = new LegacyMatch(rules, new Random(201026));
+            var second = new LegacyMatch(rules, new Random(201026));
             do
             {
                 PlayRound(first, first.Round % 3, first.Round % 2 == 0 ? ClockAction.Keep : ClockAction.Swap);
@@ -334,7 +336,7 @@ namespace TimeTheft.Tests
             } while (first.Stage != RoundStage.GameOver);
         }
 
-        private static TimeTheftMatch AtDecision(int life, int playerValue, int aiValue, ClockAction aiAction,
+        private static LegacyMatch AtDecision(int life, int playerValue, int aiValue, ClockAction aiAction,
             int discardedValue = 4, double? draw = null)
         {
             var rules = new PrototypeRules { InitialLife = life };
@@ -342,7 +344,7 @@ namespace TimeTheft.Tests
             {
                 rules.AiSwapAtMinimum = rules.AiSwapAtMaximum = aiAction == ClockAction.Swap ? 1f : 0f;
             }
-            var match = new TimeTheftMatch(rules,
+            var match = new LegacyMatch(rules,
                 new ScriptedRandom(new[] { playerValue, aiValue, discardedValue }, 0, draw ?? 0.5));
             Assert.That(match.BeginRound(), Is.True);
             Assert.That(match.OpenSelection(), Is.True);
@@ -351,14 +353,14 @@ namespace TimeTheft.Tests
             return match;
         }
 
-        private static void Settle(TimeTheftMatch match, ClockAction action)
+        private static void Settle(LegacyMatch match, ClockAction action)
         {
             Assert.That(match.CommitAction(action), Is.True);
             Assert.That(match.ResolveExchange(), Is.True);
             Assert.That(match.Settle(), Is.True);
         }
 
-        private static void PlayRound(TimeTheftMatch match, int selectedIndex, ClockAction action)
+        private static void PlayRound(LegacyMatch match, int selectedIndex, ClockAction action)
         {
             Assert.That(match.BeginRound(), Is.True);
             Assert.That(match.OpenSelection(), Is.True);
@@ -368,7 +370,7 @@ namespace TimeTheft.Tests
             Assert.That(match.FinishRound(), Is.True);
         }
 
-        private static void AllocateClocks(TimeTheftMatch match, int preferredIndex)
+        private static void AllocateClocks(LegacyMatch match, int preferredIndex)
         {
             if (match.Stage == RoundStage.SelectingAi)
             {
@@ -386,7 +388,7 @@ namespace TimeTheft.Tests
             Assert.That(match.Stage, Is.EqualTo(RoundStage.Inspecting));
         }
 
-        private static void RejectWithoutMutation(TimeTheftMatch match, Func<bool> operation)
+        private static void RejectWithoutMutation(LegacyMatch match, Func<bool> operation)
         {
             string before = match.DebugSnapshot();
             Assert.That(operation(), Is.False);

@@ -1,3 +1,4 @@
+using TimeTheft.Legacy;
 #if UNITY_EDITOR
 using System;
 using System.Collections;
@@ -13,6 +14,7 @@ using UnityEngine.UI;
 
 namespace TimeTheft.Tests
 {
+    [Category("Legacy")]
     public sealed class TabletopGameFlowTests
     {
         private InputTestFixture input;
@@ -446,7 +448,7 @@ namespace TimeTheft.Tests
             Assert.That(controller.View.Pot.text, Is.EqualTo(controller.Match.Pot + "h"));
         }
 
-        private void AssertDisplayedSettlementRange(int previousPlayer, int previousAi, int previousPot, TimeTheftMatch match)
+        private void AssertDisplayedSettlementRange(int previousPlayer, int previousAi, int previousPot, LegacyMatch match)
         {
             int player = int.Parse(controller.View.PlayerLife.text.TrimEnd('h'));
             int ai = int.Parse(controller.View.AiLife.text.TrimEnd('h'));

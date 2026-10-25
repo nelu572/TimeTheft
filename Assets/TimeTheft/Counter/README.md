@@ -1,6 +1,6 @@
 # 통합 시간 계수기 · 비주얼 v1
 
-최근 픽셀 가독성 개선본을 기준으로 정리한 제작 에셋이다. `TimeTheftGame.unity`에서 기존 View에 세 TMP 표시부를 연결해 실제 수명·판돈을 표시한다. `TabletopGame.unity`는 프로토타입·회귀 검증용으로 보존하며 규칙·정산 계산은 기존 시스템을 재사용한다. 최종 아트 승인은 별도다.
+최근 픽셀 가독성 개선본을 기준으로 정리한 제작 에셋이다. `TimeTheftGame.unity`의 `TimeTheftGameView`에 세 TMP 표시부를 연결해 현행 분 단위 게임의 수명·Time Bank를 표시한다. `TabletopGame.unity`는 이전 유지/교환 규칙의 프로토타입·Legacy 회귀 검증용으로 보존한다. 현행 코드·씬 진입점과 검증 결과는 루트 [HANDOFF.md](../../../HANDOFF.md)를 참고한다. 계수기 제작 자산과 최종 아트 승인 상태는 그대로 유지한다.
 
 ## 기준 에셋과 제작 원본
 
@@ -42,7 +42,7 @@ python -B Tools/Counter/build_display.py
 python -B Tools/Counter/verify_counter.py --output <프로젝트 밖 검증 폴더>/texture-verification.json
 ```
 
-표면 작성기는 기존 UV와 원본 색면을 고정 팔레트에 매핑한다. 폰트 작성기는 Galmuri7 원본 글리프와 자체 숫자 형상을 PNG/메트릭으로 출력한다. Unity에서 `Import bitmap display sources`를 실행하면 TMP 자산에 반영한다. 숫자는 문자열로 갱신 가능하며 표면 텍스처에 굽지 않았다. Study 씬은 `00:00 / 30:00 / 30:00` 고정 검증값, 메인 씬은 실제 게임 값의 `HH:00` 표시와 고유 색상을 사용한다. Focus와 Collider는 메인 씬 인스턴스에만 연결한다.
+표면 작성기는 기존 UV와 원본 색면을 고정 팔레트에 매핑한다. 폰트 작성기는 Galmuri7 원본 글리프와 자체 숫자 형상을 PNG/메트릭으로 출력한다. Unity에서 `Import bitmap display sources`를 실행하면 TMP 자산에 반영한다. 숫자는 문자열로 갱신 가능하며 표면 텍스처에 굽지 않았다. Study 씬은 `00:00 / 30:00 / 30:00` 고정 검증값, 메인 씬은 분 정수 게임 값의 누적 `HH:MM` 표시와 고유 색상을 사용한다. Focus와 Collider는 메인 씬 인스턴스에만 연결한다.
 
 `CounterValidation.Verify(외부폴더)`는 참조·UV·필터·폰트·도관·배치를 확인하고, `CaptureViews(외부폴더)`는 게임/정면/사선/탑뷰/시차 4끝점을 촬영한다. 촬영 후 카메라와 시차 상태를 복구한다. 결과 JSON과 대량 캡처는 저장소에 포함하지 않는다.
 

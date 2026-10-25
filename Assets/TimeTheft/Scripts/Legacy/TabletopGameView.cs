@@ -1,3 +1,4 @@
+using TimeTheft.Legacy;
 using System;
 using TMPro;
 using UnityEngine;
@@ -100,7 +101,7 @@ namespace TimeTheft
             initialized = true;
         }
 
-        public void ResetTable(TimeTheftMatch match)
+        public void ResetTable(LegacyMatch match)
         {
             focusCamera.ReturnToOverview();
             CancelPresentation();
@@ -140,7 +141,7 @@ namespace TimeTheft
                     Quaternion.Slerp(dealRotations[i], homeRotations[i], t));
         }
 
-        public void OpenSelection(TimeTheftMatch match)
+        public void OpenSelection(LegacyMatch match)
         {
             bool playerTurn = match.Stage == RoundStage.Selecting;
             for (int i = 0; i < clocks.Length; i++)
@@ -207,12 +208,12 @@ namespace TimeTheft
             movingClock = -1;
         }
 
-        public void RevealPlayer(TimeTheftMatch match)
+        public void RevealPlayer(LegacyMatch match)
         {
             clocks[match.PlayerClock].Show(match.PlayerValue, true, "내 시계", TableView.PlayerColor);
         }
 
-        public void OpenDecision(TimeTheftMatch match)
+        public void OpenDecision(LegacyMatch match)
         {
             decisionUI.SetVisible(true);
             clocks[match.AiClock].Show(0, false, "상대 선택 중", TableView.AiColor);
@@ -220,7 +221,7 @@ namespace TimeTheft
             Inspectable(true);
         }
 
-        public void RevealActions(TimeTheftMatch match)
+        public void RevealActions(LegacyMatch match)
         {
             decisionUI.SetVisible(false);
             foreach (var clock in clocks) clock.Actions(false);
@@ -233,9 +234,9 @@ namespace TimeTheft
             roundFeedback.ShowActions(match.PlayerAction, match.AiAction);
         }
 
-        public void ShowExchangeVerdict(TimeTheftMatch match) => roundFeedback.ShowExchange(match.DidExchange);
+        public void ShowExchangeVerdict(LegacyMatch match) => roundFeedback.ShowExchange(match.DidExchange);
 
-        public void Exchange(TimeTheftMatch match, int oldPlayer, int oldAi)
+        public void Exchange(LegacyMatch match, int oldPlayer, int oldAi)
         {
             if (match.DidExchange)
             {
@@ -267,14 +268,14 @@ namespace TimeTheft
             if (t >= 1) exchanging = false;
         }
 
-        public void RevealFinal(TimeTheftMatch match)
+        public void RevealFinal(LegacyMatch match)
         {
             clocks[match.PlayerClock].Show(match.PlayerValue, true, "내 최종 시계", TableView.PlayerColor);
             clocks[match.AiClock].Show(match.AiValue, true, "상대 최종 시계", TableView.AiColor);
             roundFeedback.ShowValues();
         }
 
-        public void Settle(TimeTheftMatch match)
+        public void Settle(LegacyMatch match)
         {
             roundFeedback.ShowSettlement(match.PlayerLoss, match.AiLoss);
             BeginNumberChange(match);
@@ -282,7 +283,7 @@ namespace TimeTheft
 
         public void HoldRoundResult() => roundFeedback.HoldResult();
 
-        public void ShowAward(TimeTheftMatch match) => roundFeedback.ShowAward(match.Winner == MatchWinner.Player, match.Award);
+        public void ShowAward(LegacyMatch match) => roundFeedback.ShowAward(match.Winner == MatchWinner.Player, match.Award);
 
         public void CloseRound() => roundFeedback.PrepareNextRound();
 
@@ -292,14 +293,14 @@ namespace TimeTheft
                 if (clock.gameObject.activeSelf) clock.CloseFrame(t);
         }
 
-        public void Numbers(TimeTheftMatch match)
+        public void Numbers(LegacyMatch match)
         {
             SetNumbers(match.PlayerLife, match.AiLife, match.Pot);
             IsCountingTime = false;
             ResetNumberFeedback();
         }
 
-        public void BeginNumberChange(TimeTheftMatch match)
+        public void BeginNumberChange(LegacyMatch match)
         {
             fromPlayer = shownPlayer;
             fromAi = shownAi;
@@ -380,7 +381,7 @@ namespace TimeTheft
             ResetNumberFeedback();
         }
 
-        public void Result(TimeTheftMatch match)
+        public void Result(LegacyMatch match)
         {
             Numbers(match);
             IsResultVisible = true;

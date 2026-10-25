@@ -1,3 +1,4 @@
+using TimeTheft.Legacy;
 #if UNITY_EDITOR
 using System;
 using System.Collections;
@@ -17,6 +18,7 @@ using UnityEngine.UI;
 
 namespace TimeTheft.Tests
 {
+    [Category("Legacy")]
     public sealed class TabletopDecisionUITests
     {
         private InputTestFixture input;

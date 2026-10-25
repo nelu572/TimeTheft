@@ -1,3 +1,4 @@
+using TimeTheft.Legacy;
 using System;
 using System.Collections;
 using UnityEngine;
@@ -19,7 +20,7 @@ namespace TimeTheft
         [SerializeField, Min(.05f)] private float roundCloseDuration = .22f;
         private TabletopGameView view;
         private bool skipRequested;
-        public TimeTheftMatch Match { get; private set; }
+        public LegacyMatch Match { get; private set; }
         public TabletopGameView View => view;
         public PrototypeSettings Settings => settings;
 
@@ -45,7 +46,7 @@ namespace TimeTheft
             if (!isActiveAndEnabled || !view) return;
             StopAllCoroutines();
             skipRequested = false;
-            Match = new TimeTheftMatch(settings.Rules, settings.RandomSeed == 0 ? new System.Random() : new System.Random(settings.RandomSeed));
+            Match = new LegacyMatch(settings.Rules, settings.RandomSeed == 0 ? new System.Random() : new System.Random(settings.RandomSeed));
             view.ResetTable(Match);
             StartCoroutine(Deal());
         }

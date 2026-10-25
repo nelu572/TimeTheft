@@ -1,3 +1,4 @@
+using TimeTheft.Legacy;
 using System;
 using TMPro;
 using UnityEngine;
@@ -106,7 +107,7 @@ namespace TimeTheft
             }
         }
 
-        public void OpenSelection(TimeTheftMatch match)
+        public void OpenSelection(LegacyMatch match)
         {
             for (int i = 0; i < Clocks.Length; i++)
             {
@@ -173,7 +174,7 @@ namespace TimeTheft
             Clocks[oldAi].Rect.anchoredPosition = Vector2.Lerp(AiPosition, PlayerPosition, t) + Vector2.right * arc;
         }
 
-        public void RevealFinalClocks(TimeTheftMatch match)
+        public void RevealFinalClocks(LegacyMatch match)
         {
             Clocks[match.PlayerClock].Show(match.PlayerValue, true, "나의 최종 시계", PlayerColor);
             Clocks[match.AiClock].Show(match.AiValue, true, "상대의 최종 시계", AiColor);
@@ -240,12 +241,12 @@ namespace TimeTheft
         }
 
         public void ExchangeCue(bool show) => exchangeCue.gameObject.SetActive(show);
-        public void RememberRound(TimeTheftMatch match)
+        public void RememberRound(LegacyMatch match)
         {
             lastRound.text = $"지난 라운드\n나 -{match.PlayerLoss}h  /  상대 -{match.AiLoss}h\n{(match.DidExchange ? "시계 교환" : "제자리 유지")}";
         }
 
-        public void Result(TimeTheftMatch match)
+        public void Result(LegacyMatch match)
         {
             Actions(false);
             Skip.gameObject.SetActive(false);

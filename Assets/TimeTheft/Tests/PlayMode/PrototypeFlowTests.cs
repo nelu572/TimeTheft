@@ -1,3 +1,4 @@
+using TimeTheft.Legacy;
 using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -6,9 +7,13 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+#if UNITY_EDITOR
+using UnityEditor.SceneManagement;
+#endif
 
 namespace TimeTheft.Tests
 {
+    [Category("Legacy")]
     public sealed class PrototypeFlowTests
     {
         private PrototypeController controller;
@@ -16,7 +21,13 @@ namespace TimeTheft.Tests
         [UnitySetUp]
         public IEnumerator LoadPrototype()
         {
+#if UNITY_EDITOR
+            // 보존용 씬은 빌드에서 비활성이다. 메인 진입 씬을 바꾸지 않고 Editor에서 직접 연다.
+            yield return EditorSceneManager.LoadSceneInPlayMode("Assets/Scenes/SampleScene.unity",
+                new LoadSceneParameters(LoadSceneMode.Single));
+#else
             yield return SceneManager.LoadSceneAsync("Assets/Scenes/SampleScene.unity");
+#endif
             yield return null;
             controller = Object.FindFirstObjectByType<PrototypeController>();
             Assert.That(controller, Is.Not.Null);
