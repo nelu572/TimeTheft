@@ -1,6 +1,6 @@
 # 통합 시간 계수기 · 비주얼 v1
 
-최근 픽셀 가독성 개선본을 기준으로 정리한 제작 에셋이다. `TimeTheftGame.unity`의 `TimeTheftGameView`에 세 TMP 표시부를 연결해 현행 분 단위 게임의 수명·Time Bank를 표시한다. `TabletopGame.unity`는 이전 유지/교환 규칙의 프로토타입·Legacy 회귀 검증용으로 보존한다. 현행 코드·씬 진입점과 검증 결과는 루트 [HANDOFF.md](../../../HANDOFF.md)를 참고한다. 계수기 제작 자산과 최종 아트 승인 상태는 그대로 유지한다.
+최근 픽셀 가독성 개선본을 기준으로 정리한 제작 에셋이다. `TimeTheftGame.unity`의 `TimeTheftGameView`에 세 TMP 표시부를 연결해 현행 분 단위 게임의 수명·Time Bank를 표시한다. 이전 유지/교환 게임의 전용 씬·진행·테스트는 제거했다. `CounterStructureStudy`가 비교용으로 참조하는 `TabletopClock.prefab`과 표시 컴포넌트는 보존한다. 현행 코드·씬 진입점과 검증 결과는 루트 [HANDOFF.md](../../../HANDOFF.md)를 참고한다. 계수기 제작 자산과 최종 아트 승인 상태는 그대로 유지한다.
 
 ## 기준 에셋과 제작 원본
 
