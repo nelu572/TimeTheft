@@ -3,8 +3,15 @@ using System;
 using TMPro;
 using UnityEngine;
 
+namespace TimeTheft.Legacy
+{
+    // 계수기 Study가 보존하는 구형 시계 표시의 동작 식별자다. 게임 규칙 모델은 제거했다.
+    public enum ClockAction { Keep, Swap }
+}
+
 namespace TimeTheft
 {
+    // CounterStructureStudy의 TabletopClock.prefab 참조와 GUID를 보존한다.
     public sealed class TabletopClockView : MonoBehaviour
     {
         [SerializeField] private TabletopFocusTarget focusTarget;
@@ -81,7 +88,7 @@ namespace TimeTheft
             selectionRing.color = new Color(tone.r, tone.g, tone.b, selectable ? .28f : .48f);
             selectionRing.enabled = selectable || selected || revealed;
             valueLabel.text = revealed ? value.ToString() : "?";
-            valueLabel.color = revealed ? TableView.Cream : TableView.Muted;
+            valueLabel.color = revealed ? new Color(.94f, .9f, .77f) : new Color(.57f, .66f, .65f);
             ownerLabel.text = owner;
             ownerLabel.color = tone;
             hand.gameObject.SetActive(revealed);

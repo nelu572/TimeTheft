@@ -34,7 +34,7 @@ namespace TimeTheft.Tests
 
         private static TimeTheftMatch Prepared(int life = 30, int hours = 1, Participant first = Participant.Player)
         {
-            var match = new TimeTheftMatch(new GameRules { InitialLifeHours = life, MinimumHours = hours, MaximumHours = hours,
+            var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, InitialLifeHours = life, MinimumHours = hours, MaximumHours = hours,
                 ExtraRedProbability = 0, FirstParticipant = first }, new OrderedRandom());
             StartBatch(match);
             return match;
@@ -58,7 +58,7 @@ namespace TimeTheft.Tests
         [Test]
         public void EqualMandatoryContributionsMoveTwentyHoursAsIntegerMinutesWithoutCreatingTime()
         {
-            var match = new TimeTheftMatch(new GameRules(), new Random(15));
+            var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(15));
             Assert.That(TimeTheftMatch.InitialContributionMinutes, Is.EqualTo(600));
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(1200));
             Assert.That(match.AiLifeMinutes, Is.EqualTo(1200));
@@ -71,7 +71,7 @@ namespace TimeTheft.Tests
         {
             for (int seed = 1; seed <= 150; seed++)
             {
-                var match = new TimeTheftMatch(new GameRules(), new Random(seed));
+                var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(seed));
                 match.BeginBatch();
                 var clocks = Enumerable.Range(0, 5).Select(match.GetClock).ToArray();
                 Assert.That(clocks.All(c => c.Visibility == ClockVisibility.Open && c.Face.HasValue), Is.True);
@@ -84,7 +84,7 @@ namespace TimeTheft.Tests
         [Test]
         public void ShuffleAndClockSelectionHideIdentitiesUntilActionIsCommitted()
         {
-            var match = new TimeTheftMatch(new GameRules(), new Random(8));
+            var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(8));
             match.BeginBatch();
             Assert.That(match.CommitAction(Participant.Player, TimeAction.Collect), Is.False);
             match.CloseAndShuffle();
@@ -288,7 +288,7 @@ namespace TimeTheft.Tests
         [Test]
         public void AiUsesPublicCompositionAndCannotDistinguishHiddenOrders()
         {
-            var rules = new GameRules { MinimumHours = 5, MaximumHours = 5, ExtraRedProbability = 0 };
+            var rules = new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MinimumHours = 5, MaximumHours = 5, ExtraRedProbability = 0 };
             for (int seed = 1; seed < 50; seed++)
             {
                 var match = new TimeTheftMatch(rules, new Random(seed));
@@ -357,7 +357,7 @@ namespace TimeTheft.Tests
         [Test]
         public void NonSequentialSelectionRevealsAndSettlesTheActualClickedClock()
         {
-            var match = new TimeTheftMatch(new GameRules { MinimumHours = 1, MaximumHours = 12,
+            var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MinimumHours = 1, MaximumHours = 12,
                 ExtraRedProbability = 0 }, new DistinctHoursRandom());
             match.BeginBatch(); match.CloseAndShuffle(); match.CompleteShuffle();
             Assert.That(match.SelectClock(Participant.Player, 4), Is.True);
@@ -427,7 +427,7 @@ namespace TimeTheft.Tests
         [Test]
         public void AiClockChoiceUsesOnlyCandidatesAndCanPickEitherRemainingClock()
         {
-            var parameters = typeof(TimeTheftAi).GetMethod(nameof(TimeTheftAi.SelectClock)).GetParameters();
+            var parameters = typeof(TimeTheftAi).GetMethod(nameof(TimeTheftAi.SelectClock), new[] { typeof(System.Collections.Generic.IReadOnlyList<int>), typeof(Random) }).GetParameters();
             Assert.That(parameters.Select(p => p.ParameterType).ToArray(),
                 Is.EqualTo(new[] { typeof(IReadOnlyList<int>), typeof(Random) }));
             var counts = new int[5];
@@ -450,7 +450,7 @@ namespace TimeTheft.Tests
         {
             for (int seed = 1; seed <= 60; seed++)
             {
-                var match = new TimeTheftMatch(new GameRules(), new Random(seed));
+                var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(seed));
                 var ai = new Random(seed ^ 0x51a7);
                 int turns = 0;
                 while (match.Stage != TurnStage.GameOver && turns++ < 2000)
@@ -471,7 +471,7 @@ namespace TimeTheft.Tests
         [Test]
         public void WeightedNumbersAndRuleSnapshotsAreConfigurableAndStable()
         {
-            var rules = new GameRules { MinimumHours = 2, MaximumHours = 4, NumberWeights = new[] { 0, 1, 0 } };
+            var rules = new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MinimumHours = 2, MaximumHours = 4, NumberWeights = new[] { 0, 1, 0 } };
             var match = new TimeTheftMatch(rules, new Random(3));
             rules.NumberWeights[0] = 999;
             rules.MinimumHours = 100;
@@ -499,14 +499,14 @@ namespace TimeTheft.Tests
         [TestCase(30, 5, 4)]
         public void InvalidRulesAreRejected(int life, int min, int max)
         {
-            Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new GameRules { InitialLifeHours = life, MinimumHours = min, MaximumHours = max }, new Random()));
+            Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, InitialLifeHours = life, MinimumHours = min, MaximumHours = max }, new Random()));
         }
 
         [Test]
         public void InitialMinuteTotalAndClockConversionCannotOverflowIntegerStorage()
         {
-            Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new GameRules { InitialLifeHours = int.MaxValue }, new Random()));
-            Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new GameRules { MaximumHours = int.MaxValue }, new Random()));
+            Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, InitialLifeHours = int.MaxValue }, new Random()));
+            Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MaximumHours = int.MaxValue }, new Random()));
         }
     }
 }

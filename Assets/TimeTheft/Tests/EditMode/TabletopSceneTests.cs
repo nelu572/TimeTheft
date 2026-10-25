@@ -21,7 +21,7 @@ namespace TimeTheft.Tests
             try
             {
                 var roots = scene.GetRootGameObjects();
-                Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<PrototypeController>(true)), Is.Empty);
+                Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<TimeTheftGameController>(true)), Is.Empty);
                 var camera = Find(scene, "CameraRig/Main Camera").GetComponent<Camera>();
                 Assert.That(camera.orthographic, Is.False);
                 Assert.That(camera.GetComponent<TabletopCameraLook>(), Is.Not.Null);
@@ -141,81 +141,6 @@ namespace TimeTheft.Tests
                     Assert.That(Vector3.Dot(watch.TransformDirection(Vector3.back), Vector3.up), Is.GreaterThan(.99f));
                     Assert.That(watch.position.y, Is.InRange(1.01f, 1.07f));
                 }
-            }
-            finally { EditorSceneManager.ClosePreviewScene(scene); }
-        }
-
-        [Test]
-        public void PlaySceneUsesThreeReusableClocksAndOneCompactDecisionOverlay()
-        {
-            var scene = EditorSceneManager.OpenPreviewScene("Assets/Scenes/TabletopGame.unity");
-            try
-            {
-                var roots = scene.GetRootGameObjects();
-                Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<PrototypeController>(true)), Is.Empty);
-                var canvases = roots.SelectMany(r => r.GetComponentsInChildren<Canvas>(true)).ToArray();
-                Assert.That(canvases, Has.Length.EqualTo(1));
-                Assert.That(canvases[0].renderMode, Is.EqualTo(RenderMode.ScreenSpaceOverlay));
-                var scaler = canvases[0].GetComponent<CanvasScaler>();
-                Assert.That(scaler, Is.Not.Null);
-                Assert.That(scaler.uiScaleMode, Is.EqualTo(CanvasScaler.ScaleMode.ScaleWithScreenSize));
-                Assert.That(scaler.referenceResolution, Is.EqualTo(new Vector2(1920, 1080)));
-                Assert.That(canvases[0].GetComponent<GraphicRaycaster>(), Is.Not.Null);
-                var eventSystems = roots.SelectMany(r => r.GetComponentsInChildren<EventSystem>(true)).ToArray();
-                Assert.That(eventSystems, Has.Length.EqualTo(1));
-                Assert.That(eventSystems[0].GetComponent<InputSystemUIInputModule>(), Is.Not.Null);
-                var view = Find(scene, "TabletopGame").GetComponent<TabletopGameView>();
-                Assert.That(view.Clocks, Has.Length.EqualTo(3));
-                var decisionUI = view.DecisionUI;
-                Assert.That(decisionUI, Is.Not.Null);
-                Assert.That(decisionUI.transform.IsChildOf(canvases[0].transform), Is.True);
-                Assert.That(decisionUI.IsVisible, Is.False, "씬에는 결정 조작부를 숨긴 상태로 저장한다");
-                Assert.That(decisionUI.KeepButton, Is.Not.Null);
-                Assert.That(decisionUI.SwapButton, Is.Not.SameAs(decisionUI.KeepButton));
-                Assert.That(canvases[0].GetComponentsInChildren<Button>(true), Has.Length.EqualTo(2));
-                foreach (var button in new[] { decisionUI.KeepButton, decisionUI.SwapButton })
-                {
-                    Assert.That(button.gameObject.activeInHierarchy, Is.False);
-                    Assert.That(button.GetComponentInChildren<TextMeshProUGUI>(true), Is.Not.Null);
-                    var icons = button.GetComponentsInChildren<Image>(true).Where(image => image != button.targetGraphic).ToArray();
-                    Assert.That(icons, Is.Not.Empty, "버튼 배경과 구분한 교체 가능한 아이콘 Image");
-                    foreach (var icon in icons)
-                    {
-                        Assert.That(icon.sprite, Is.Not.Null);
-                        Assert.That(AssetDatabase.GetAssetPath(icon.sprite), Is.Not.Empty, "임시 아이콘도 에셋 Sprite로 연결한다");
-                    }
-                }
-                var camera = Find(scene, "CameraRig/Main Camera").GetComponent<Camera>();
-                camera.aspect = 16f / 9;
-                foreach (var clock in view.Clocks)
-                {
-                    Assert.That(PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(clock),
-                        Is.EqualTo("Assets/TimeTheft/Prefabs/TabletopClock.prefab"));
-                    Assert.That(clock.FocusTarget.FocusOnClick, Is.False);
-                    camera.transform.SetPositionAndRotation(clock.FocusTarget.FocusPoint.position, clock.FocusTarget.FocusPoint.rotation);
-                    camera.fieldOfView = clock.FocusTarget.FieldOfView;
-                    foreach (var control in new[] { clock.Keep, clock.Swap })
-                    {
-                        Assert.That(control.FocusPoint.IsChildOf(clock.transform), Is.True);
-                        Assert.That(control.FocusOnClick, Is.False);
-                        // 초기에는 숨겨진 조작부도 실제 집중 시점에서 읽을 수 있어야 한다.
-                        control.transform.parent.gameObject.SetActive(true);
-                        Assert.That(control.GetComponent<TabletopDecisionObject>(), Is.Not.Null);
-                        control.GetComponent<TabletopDecisionObject>().Artwork.gameObject.SetActive(true);
-                        AssertNumberReadable(camera, control.GetComponentInChildren<TextMeshPro>(true));
-                    }
-                }
-                foreach (var root in roots)
-                    foreach (var transform in root.GetComponentsInChildren<Transform>(true))
-                        Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(transform.gameObject), Is.Zero, transform.name);
-                Assert.That(view.PlayerLife, Is.Not.Null);
-                Assert.That(view.AiLife, Is.Not.Null);
-                Assert.That(view.Pot, Is.Not.Null);
-                Assert.That(view.Restart.FocusOnClick, Is.False);
-                Assert.That(Find(scene, "Environment/Table").Find("ControlPlaque"), Is.Null);
-                Assert.That(view.Status.transform.parent.gameObject.activeSelf, Is.False);
-                Assert.That(view.RoundLabel, Is.Not.Null);
-                Assert.That(Find(scene, "ItemSlots").GetComponentsInChildren<TabletopFocusTarget>(true), Is.Empty);
             }
             finally { EditorSceneManager.ClosePreviewScene(scene); }
         }

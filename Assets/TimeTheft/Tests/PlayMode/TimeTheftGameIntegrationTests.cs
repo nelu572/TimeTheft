@@ -30,7 +30,7 @@ namespace TimeTheft.Tests
         public IEnumerator LoadMainScene()
         {
             oldTimeScale = Time.timeScale;
-            TabletopDecisionUITestInput.DisableSceneModules();
+            GameUiTestInput.DisableSceneModules();
             input = new InputTestFixture(); input.Setup();
             InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
             mouse = InputSystem.AddDevice<Mouse>("TimeTheftV03Mouse");
@@ -40,6 +40,9 @@ namespace TimeTheft.Tests
             controller = UnityEngine.Object.FindFirstObjectByType<TimeTheftGameController>();
             Assert.That(controller, Is.Not.Null);
             settings = UnityEngine.Object.Instantiate(controller.Settings);
+            // 기존 규칙/입력 회귀는 지급과 분리한다. 지급 통합 검사는 명시적으로 다시 켠다.
+            settings.Rules.InitialItemCount = settings.Rules.ItemsPerBatch = 0;
+            settings.Rules.EnableAiItemStrategy = false;
             settings.RandomSeed = 635;
             settings.PreviewDuration = .2f;
             settings.ShuffleDuration = settings.RevealDuration = settings.TransferDuration = settings.AiThinkDuration =
@@ -63,7 +66,7 @@ namespace TimeTheft.Tests
         {
             if (controller) controller.enabled = false;
             if (focus) focus.enabled = false;
-            TabletopDecisionUITestInput.DisableSceneModules();
+            GameUiTestInput.DisableSceneModules();
             if (settings) UnityEngine.Object.Destroy(settings);
             Time.timeScale = oldTimeScale;
             yield return null;
@@ -74,7 +77,6 @@ namespace TimeTheft.Tests
         public IEnumerator MainSceneCompletesThroughActionButtonsAndActualClockClicks()
         {
             Assert.That(UnityEngine.Object.FindObjectsByType<TimeTheftGameController>(FindObjectsSortMode.None), Has.Length.EqualTo(1));
-            Assert.That(UnityEngine.Object.FindFirstObjectByType<TabletopGameController>(), Is.Null);
             Assert.That(UnityEngine.Object.FindObjectsByType<EventSystem>(FindObjectsSortMode.None), Has.Length.EqualTo(1));
             Assert.That(GameObject.Find("Action UI/Controls/Ready"), Is.Null);
             var counter = GameObject.Find("Devices/IntegratedTimeCounter").transform;
@@ -347,13 +349,1046 @@ namespace TimeTheft.Tests
             AssertNumbers();
         }
 
+        [UnityTest]
+        public IEnumerator FoundationItemsUseSequentiallyThroughKeysBeforeActualClockInput()
+        {
+            // Setup의 마지막 프레임이 길어도 첫 관찰 중에 동기적으로 주입한다.
+            controller.RestartGame();
+            int first = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.Screwdriver, ItemTestUse.RecordCurrentEffect);
+            int second = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.Screwdriver, ItemTestUse.RecordFutureEffect);
+            int unavailable = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.Scissors);
+            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems);
+            var match = controller.Match;
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("공통 기반 테스트"));
+            Assert.That(controller.View.Clocks.All(c => !c.SelectionTarget.InputEnabled && !c.IsOpen), Is.True);
+            controller.SelectClock(0); controller.ChooseAction(TimeAction.Collect);
+            Assert.That(match.CurrentClock, Is.EqualTo(-1));
+            yield return PressItemKey(keyboard.iKey);
+            Assert.That(controller.IsPresentingItem, Is.True);
+            controller.UseItem(second); controller.EndItemPhase();
+            Assert.That(match.GetInventory(Participant.Player).Select(i => i.Id), Is.EqualTo(new[] { second, unavailable }));
+            Assert.That(controller.View.LastItemUse.Value.ItemId, Is.EqualTo(first));
+            yield return WaitFor(() => !controller.IsPresentingItem);
+            yield return PressItemKey(keyboard.iKey);
+            yield return WaitFor(() => !controller.IsPresentingItem);
+            Assert.That(match.GetCurrentItemEffects(Participant.Player), Has.Count.EqualTo(1));
+            Assert.That(match.GetPendingItemEffects(Participant.Player), Has.Count.EqualTo(1));
+            Assert.That(match.PlayerLifeMinutes, Is.EqualTo(1200));
+            Assert.That(match.AiLifeMinutes, Is.EqualTo(1200));
+            Assert.That(match.BankMinutes, Is.EqualTo(1200));
+            Assert.That(controller.View.SelectedTestItemId, Is.Null);
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("제거할 상대 보유품 없음"));
+            yield return PressItemKey(keyboard.enterKey);
+            Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
+            controller.UseItem(unavailable);
+            Assert.That(match.GetInventory(Participant.Player), Has.Count.EqualTo(1));
+            yield return ClickClock(4);
+            yield return ChooseAction(TimeAction.Ration);
+            yield return WaitFor(() => match.Turn == 3 && match.Stage == TurnStage.AwaitingItems);
+            Assert.That(match.GetCurrentItemEffects(Participant.Player), Is.Empty);
+            Assert.That(match.GetPendingItemEffects(Participant.Player), Has.Count.EqualTo(1));
+            Assert.That(match.ActiveParticipant, Is.EqualTo(Participant.Player));
+            Assert.That(match.UsedCount, Is.EqualTo(2));
+            AssertNumbers();
+        }
+
+        [UnityTest]
+        public IEnumerator AiKeepsInventoryUntilStrategyIntegrationAndEndsAWithoutExposingItsItems()
+        {
+            settings.Rules.FirstParticipant = Participant.Ai;
+            controller.RestartGame();
+            int aiItem = TimeTheftItemTestSetup.Give(controller.Match, Participant.Ai, ItemKind.Handcuffs);
+            foreach (ItemKind kind in Enum.GetValues(typeof(ItemKind)).Cast<ItemKind>().Where(kind => kind != ItemKind.Screwdriver && kind != ItemKind.TimeBypass))
+                TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, kind);
+            yield return WaitFor(() => controller.Match.Turn == 2 && controller.Match.Stage == TurnStage.AwaitingItems);
+            var match = controller.Match;
+            Assert.That(match.GetInventory(Participant.Ai).Single().Id, Is.EqualTo(aiItem));
+            Assert.That(match.GetInventory(Participant.Player), Has.Count.EqualTo(4));
+            Assert.That(controller.View.SelectedTestItemId, Is.Null);
+            Assert.That(controller.View.LastItemUse, Is.Null);
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("여벌 열쇠"));
+            Assert.That(controller.View.SelectedItemId, Is.EqualTo(2));
+            Assert.That(match.GetInventory(Participant.Player), Has.Count.EqualTo(4));
+            yield return PressItemKey(keyboard.tabKey);
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("#3"));
+            yield return PressItemKey(keyboard.enterKey);
+            Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
+            Assert.That(match.GetInventory(Participant.Ai), Has.Count.EqualTo(1));
+            Assert.That(match.GetCurrentItemEffects(Participant.Ai), Is.Empty);
+            yield return ClickClock(4);
+            Assert.That(match.GetClock(4).Face, Is.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator RestartAndDisableCancelItemFeedbackAndClearAllItemState()
+        {
+            foreach (bool disable in new[] { false, true })
+            {
+                controller.RestartGame();
+                int id = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.TimeBypass, ItemTestUse.RecordFutureEffect);
+                TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.Screwdriver, ItemTestUse.RecordCurrentEffect);
+                yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems);
+                var oldMatch = controller.Match;
+                controller.UseItem(id);
+                Assert.That(controller.IsPresentingItem, Is.True);
+                Assert.That(oldMatch.GetPendingItemEffects(Participant.Player), Has.Count.EqualTo(1));
+                if (disable)
+                {
+                    controller.enabled = false;
+                    controller.UseItem(id); controller.EndItemPhase();
+                    Assert.That(controller.View.Clocks.All(c => !c.SelectionTarget.InputEnabled), Is.True);
+                    Assert.That(controller.IsPresentingItem, Is.False);
+                    controller.enabled = true;
+                }
+                else controller.RestartGame();
+                Assert.That(controller.Match, Is.Not.SameAs(oldMatch));
+                Assert.That(controller.View.LastItemUse, Is.Null);
+                Assert.That(controller.Match.GetInventory(Participant.Player), Is.Empty);
+                Assert.That(controller.Match.GetCurrentItemEffects(Participant.Player), Is.Empty);
+                Assert.That(controller.Match.GetPendingItemEffects(Participant.Player), Is.Empty);
+                yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingClock);
+                yield return new WaitForSecondsRealtime(.2f);
+                controller.UseItem(id);
+                Assert.That(controller.Match.CurrentClock, Is.EqualTo(-1));
+                Assert.That(controller.Match.UsedCount, Is.Zero);
+                Assert.That(controller.Match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
+                Assert.That(controller.View.Clocks.All(c => c.SelectionTarget.InputEnabled), Is.True);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator LastTestItemAutoEndsAButClockInputWaitsForFeedback()
+        {
+            controller.RestartGame();
+            int id = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.RubberDuck, ItemTestUse.RecordCurrentEffect);
+            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems);
+            controller.UseItem(id);
+            Assert.That(controller.Match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
+            Assert.That(controller.IsPresentingItem, Is.True);
+            controller.SelectClock(4); controller.EndItemPhase(); controller.UseItem(id);
+            Assert.That(controller.Match.CurrentClock, Is.EqualTo(-1));
+            Assert.That(controller.View.Clocks.All(c => !c.SelectionTarget.InputEnabled), Is.True);
+            controller.SkipAnimation();
+            yield return WaitFor(() => !controller.IsPresentingItem);
+            Assert.That(controller.Match.GetCurrentItemEffects(Participant.Player), Has.Count.EqualTo(1));
+            Assert.That(controller.View.Clocks.All(c => c.SelectionTarget.InputEnabled), Is.True);
+            yield return ClickClock(4);
+            yield return ChooseAction(TimeAction.Ration);
+            yield return WaitFor(() => controller.Match.Turn == 3 && controller.Match.Stage == TurnStage.AwaitingClock);
+            Assert.That(controller.Match.GetCurrentItemEffects(Participant.Player), Is.Empty);
+            Assert.That(controller.Match.GetInventory(Participant.Player), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator RealScrewdriverUsesKeysBlocksDuplicatesAndShowsReducedCounters()
+        {
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.TransferDuration = .3f;
+            settings.ResultHoldDuration = .4f;
+            controller.RestartGame();
+            var match = controller.Match;
+            int driver = TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Screwdriver);
+            int spare = TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Screwdriver);
+            int other = TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Scissors, ItemTestUse.RecordCurrentEffect);
+            int red = ReferenceClockIndex(ClockKind.Red);
+            yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+            Assert.That(controller.View.SelectedItemId, Is.EqualTo(driver));
+            Assert.That(controller.View.SelectedTestItemId, Is.Null);
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("드라이버").And.Not.Contain("실제 효과 없음"));
+            yield return PressItemKey(keyboard.iKey);
+            Assert.That(match.HasScrewdriverProtection, Is.True);
+            Assert.That(match.GetInventory(Participant.Player).Select(i => i.Id), Is.EqualTo(new[] { spare, other }));
+            controller.UseItem(spare); controller.EndItemPhase(); controller.SelectClock(red);
+            Assert.That(match.CurrentClock, Is.EqualTo(-1));
+            yield return WaitFor(() => !controller.IsPresentingItem);
+            controller.UseItem(spare);
+            Assert.That(match.CheckItemUse(Participant.Player, spare), Is.EqualTo(ItemUseFailure.AlreadyActive));
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("이번 차례 이미 사용"));
+            Assert.That(match.GetInventory(Participant.Player), Has.Count.EqualTo(2));
+            yield return PressItemKey(keyboard.tabKey);
+            yield return PressItemKey(keyboard.iKey);
+            yield return WaitFor(() => !controller.IsPresentingItem);
+            Assert.That(match.GetCurrentItemEffects(Participant.Player), Has.Count.EqualTo(2));
+            yield return PressItemKey(keyboard.enterKey);
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("드라이버 대기 중"));
+            yield return ClickClock(red);
+            Assert.That(match.GetClock(red).Face, Is.Null);
+            yield return ChooseAction(TimeAction.Collect);
+            yield return WaitFor(() => controller.View.IsCountingTime);
+            Assert.That(match.PlayerLifeMinutes, Is.EqualTo(960));
+            Assert.That(match.AiLifeMinutes, Is.EqualTo(1200));
+            Assert.That(match.BankMinutes, Is.EqualTo(1440));
+            Assert.That(match.TransferredMinutes, Is.EqualTo(240));
+            Assert.That(match.LastItemEffects.Single().PreventedMinutes, Is.EqualTo(240));
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("경감 04:00 / 실제 손실 04:00"));
+            Assert.That(match.HasScrewdriverProtection, Is.False);
+            Assert.That(match.GetCurrentItemEffects(Participant.Player), Is.Empty);
+            while (controller.View.IsCountingTime)
+            {
+                Assert.That(Read(controller.View.PlayerLife) + Read(controller.View.AiLife) + Read(controller.View.Bank), Is.EqualTo(3600));
+                yield return null;
+            }
+            AssertNumbers();
+            Assert.That(controller.View.PlayerLife.text, Is.EqualTo("16:00"));
+            Assert.That(controller.View.Bank.text, Is.EqualTo("24:00"));
+        }
+
+        [UnityTest]
+        public IEnumerator RealScrewdriverNonTriggersConsumeAndDisplayFeedbackWithoutChangingTransfer()
+        {
+            settings.Rules.InitialLifeHours = 100;
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.TransferDuration = .25f;
+            settings.ResultHoldDuration = .4f;
+            foreach (var scenario in new[] { 0, 1, 2 })
+            {
+                controller.RestartGame();
+                var match = controller.Match;
+                int id = TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Screwdriver);
+                ClockKind kind = scenario == 2 ? ClockKind.Red : ClockKind.Normal;
+                TimeAction action = scenario == 0 ? TimeAction.Collect : TimeAction.Ration;
+                int index = ReferenceClockIndex(kind);
+                yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+                yield return PressItemKey(keyboard.iKey);
+                yield return WaitFor(() => !controller.IsPresentingItem);
+                Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
+                yield return ClickClock(index);
+                yield return ChooseAction(action);
+                yield return WaitFor(() => controller.View.IsCountingTime);
+                Assert.That(match.GetInventory(Participant.Player), Is.Empty);
+                Assert.That(match.HasScrewdriverProtection, Is.False);
+                Assert.That(match.LastItemEffects.Single().Source.Id, Is.EqualTo(id));
+                Assert.That(match.LastItemEffects.Single().Triggered, Is.False);
+                Assert.That(match.LastItemEffects.Single().PreventedMinutes, Is.Zero);
+                Assert.That(match.TransferredMinutes, Is.EqualTo(action == TimeAction.Collect ? 480 : 160));
+                Assert.That(controller.View.PhaseLabel.text, Does.Contain("드라이버 · 미발동 (소모됨)"));
+                yield return WaitFor(() => !controller.View.IsCountingTime);
+                AssertNumbers();
+                Assert.That(Read(controller.View.PlayerLife) + Read(controller.View.AiLife) + Read(controller.View.Bank), Is.EqualTo(12000));
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator RealScrewdriverSurvivesExcessLossAndRestartOrDisableClearsProtection()
+        {
+            settings.Rules.InitialLifeHours = 13;
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 10;
+            settings.TransferDuration = .3f;
+            settings.ResultHoldDuration = .4f;
+            controller.RestartGame();
+            int id = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.Screwdriver);
+            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems);
+            controller.UseItem(id);
+            yield return WaitFor(() => !controller.IsPresentingItem);
+            yield return ClickClock(ReferenceClockIndex(ClockKind.Red));
+            yield return ChooseAction(TimeAction.Collect);
+            yield return WaitFor(() => controller.View.IsCountingTime);
+            Assert.That(controller.Match.PlayerLifeMinutes, Is.EqualTo(90));
+            Assert.That(controller.Match.BankMinutes, Is.EqualTo(1290));
+            Assert.That(controller.Match.Winner, Is.EqualTo(GameWinner.None));
+            Assert.That(controller.Match.LastItemEffects.Single().PreventedMinutes, Is.EqualTo(90));
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("경감 01:30 / 실제 손실 01:30"));
+            foreach (bool disable in new[] { false, true })
+            {
+                controller.RestartGame();
+                id = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.Screwdriver);
+                yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems);
+                controller.UseItem(id);
+                Assert.That(controller.Match.HasScrewdriverProtection, Is.True);
+                if (disable) { controller.enabled = false; controller.enabled = true; }
+                else controller.RestartGame();
+                Assert.That(controller.Match.HasScrewdriverProtection, Is.False);
+                Assert.That(controller.Match.LastItemEffects, Is.Empty);
+                Assert.That(controller.Match.GetInventory(Participant.Player), Is.Empty);
+                yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingClock);
+                Assert.That(controller.Match.UsedCount, Is.Zero);
+                Assert.That(controller.IsPresentingItem, Is.False);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TimeBypassSplitsBothCollectionFacesAndShowsRecipientAndBank()
+        {
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.TransferDuration = .3f;
+            settings.ResultHoldDuration = .4f;
+            foreach (var kind in new[] { ClockKind.Normal, ClockKind.Red })
+            {
+                controller.RestartGame();
+                var match = controller.Match;
+                int id = TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.TimeBypass);
+                int duplicate = TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.TimeBypass);
+                yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+                Assert.That(controller.View.SelectedItemId, Is.EqualTo(id));
+                Assert.That(controller.View.PhaseLabel.text, Does.Contain("우회선").And.Not.Contain("드라이버"));
+                yield return PressItemKey(keyboard.iKey);
+                controller.UseItem(duplicate); controller.SelectClock(0); controller.EndItemPhase();
+                Assert.That(match.CurrentClock, Is.EqualTo(-1));
+                yield return WaitFor(() => !controller.IsPresentingItem);
+                controller.UseItem(duplicate);
+                Assert.That(match.GetInventory(Participant.Player).Single().Id, Is.EqualTo(duplicate));
+                Assert.That(match.CheckItemUse(Participant.Player, duplicate), Is.EqualTo(ItemUseFailure.AlreadyActive));
+                Assert.That(controller.View.PhaseLabel.text, Does.Contain("우회선 대기 중").And.Contain("이번 차례 이미 사용"));
+                yield return PressItemKey(keyboard.enterKey);
+                yield return ClickClock(ReferenceClockIndex(kind));
+                yield return ChooseAction(TimeAction.Collect);
+                yield return WaitFor(() => controller.View.IsCountingTime);
+                bool normal = kind == ClockKind.Normal;
+                Assert.That(match.PlayerLifeMinutes, Is.EqualTo(normal ? 1440 : 720));
+                Assert.That(match.AiLifeMinutes, Is.EqualTo(normal ? 720 : 1440));
+                Assert.That(match.BankMinutes, Is.EqualTo(1440));
+                Assert.That(match.TransferredMinutes, Is.EqualTo(480));
+                Assert.That(match.LastTransfers.Count, Is.EqualTo(2));
+                Assert.That(match.LastTransfers.Sum(t => t.Minutes), Is.EqualTo(480));
+                Assert.That(match.LastItemEffects.Single().BypassedMinutes, Is.EqualTo(240));
+                Assert.That(match.HasTimeBypass, Is.False);
+                Assert.That(controller.View.PhaseLabel.text, Does.Contain("우회선 · " + (normal ? "나" : "상대") + "에게 04:00 / Bank 04:00"));
+                yield return CheckCountingTotal(3600);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TimeBypassCombinesWithScrewdriverInEitherUseOrder()
+        {
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.TransferDuration = .3f;
+            settings.ResultHoldDuration = .4f;
+            foreach (bool bypassFirst in new[] { false, true })
+            foreach (var kind in new[] { ClockKind.Normal, ClockKind.Red })
+            {
+                controller.RestartGame();
+                var match = controller.Match;
+                TimeTheftItemTestSetup.Give(match, Participant.Player, bypassFirst ? ItemKind.TimeBypass : ItemKind.Screwdriver);
+                TimeTheftItemTestSetup.Give(match, Participant.Player, bypassFirst ? ItemKind.Screwdriver : ItemKind.TimeBypass);
+                yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+                yield return PressItemKey(keyboard.iKey);
+                yield return WaitFor(() => !controller.IsPresentingItem);
+                yield return PressItemKey(keyboard.iKey);
+                yield return WaitFor(() => !controller.IsPresentingItem);
+                Assert.That(match.HasScrewdriverProtection && match.HasTimeBypass, Is.True);
+                Assert.That(controller.View.PhaseLabel.text, Does.Contain("드라이버 대기 중").And.Contain("우회선 대기 중"));
+                yield return ClickClock(ReferenceClockIndex(kind));
+                yield return ChooseAction(TimeAction.Collect);
+                yield return WaitFor(() => controller.View.IsCountingTime);
+                bool normal = kind == ClockKind.Normal;
+                Assert.That(match.PlayerLifeMinutes, Is.EqualTo(normal ? 1440 : 960));
+                Assert.That(match.AiLifeMinutes, Is.EqualTo(normal ? 720 : 1320));
+                Assert.That(match.BankMinutes, Is.EqualTo(normal ? 1440 : 1320));
+                var driver = match.LastItemEffects.Single(e => e.Source.Kind == ItemKind.Screwdriver);
+                var bypass = match.LastItemEffects.Single(e => e.Source.Kind == ItemKind.TimeBypass);
+                Assert.That(driver.Triggered, Is.EqualTo(!normal));
+                Assert.That(driver.PreventedMinutes, Is.EqualTo(normal ? 0 : 240));
+                Assert.That(bypass.BypassedMinutes, Is.EqualTo(normal ? 240 : 120));
+                Assert.That(bypass.BankReceivedMinutes, Is.EqualTo(normal ? 240 : 120));
+                if (!normal) Assert.That(controller.View.PhaseLabel.text,
+                    Does.Contain("경감 04:00 / 실제 손실 04:00").And.Contain("상대에게 02:00 / Bank 02:00"));
+                Assert.That(match.GetCurrentItemEffects(Participant.Player), Is.Empty);
+                yield return CheckCountingTotal(3600);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TimeBypassAndScrewdriverRationNonTriggersKeepOriginalPayment()
+        {
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.TransferDuration = .3f;
+            settings.ResultHoldDuration = .4f;
+            foreach (var kind in new[] { ClockKind.Normal, ClockKind.Red })
+            {
+                controller.RestartGame();
+                var match = controller.Match;
+                TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.TimeBypass);
+                TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Screwdriver);
+                yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+                yield return PressItemKey(keyboard.iKey);
+                yield return WaitFor(() => !controller.IsPresentingItem);
+                yield return PressItemKey(keyboard.iKey);
+                yield return WaitFor(() => !controller.IsPresentingItem);
+                yield return ClickClock(ReferenceClockIndex(kind));
+                yield return ChooseAction(TimeAction.Ration);
+                yield return WaitFor(() => controller.View.IsCountingTime);
+                Assert.That(match.LastTransfers.Count, Is.EqualTo(1));
+                Assert.That(match.LastTransfers.Single().From, Is.EqualTo(TimeAccount.Bank));
+                Assert.That(match.TransferredMinutes, Is.EqualTo(160));
+                Assert.That(match.BankMinutes, Is.EqualTo(1040));
+                Assert.That(match.PlayerLifeMinutes, Is.EqualTo(kind == ClockKind.Normal ? 1360 : 1200));
+                Assert.That(match.AiLifeMinutes, Is.EqualTo(kind == ClockKind.Normal ? 1200 : 1360));
+                Assert.That(match.LastItemEffects.All(e => !e.Triggered && e.PreventedMinutes == 0 && e.BypassedMinutes == 0), Is.True);
+                Assert.That(controller.View.PhaseLabel.text, Does.Contain("우회선 · 미발동 (소모됨)").And.Contain("드라이버 · 미발동 (소모됨)"));
+                Assert.That(match.GetInventory(Participant.Player), Is.Empty);
+                yield return CheckCountingTotal(3600);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TimeBypassRestartAndDisableCancelFeedbackAndClearBothEffects()
+        {
+            foreach (bool disable in new[] { false, true })
+            {
+                controller.RestartGame();
+                var oldMatch = controller.Match;
+                int id = TimeTheftItemTestSetup.Give(oldMatch, Participant.Player, ItemKind.TimeBypass);
+                TimeTheftItemTestSetup.Give(oldMatch, Participant.Player, ItemKind.Screwdriver);
+                yield return WaitFor(() => oldMatch.Stage == TurnStage.AwaitingItems);
+                controller.UseItem(id);
+                Assert.That(controller.IsPresentingItem, Is.True);
+                Assert.That(oldMatch.HasTimeBypass, Is.True);
+                if (disable) { controller.enabled = false; controller.enabled = true; }
+                else controller.RestartGame();
+                Assert.That(controller.Match, Is.Not.SameAs(oldMatch));
+                Assert.That(controller.Match.HasTimeBypass || controller.Match.HasScrewdriverProtection, Is.False);
+                Assert.That(controller.Match.LastTransfers, Is.Empty);
+                Assert.That(controller.Match.LastItemEffects, Is.Empty);
+                Assert.That(controller.Match.GetInventory(Participant.Player), Is.Empty);
+                yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingClock);
+                controller.UseItem(id);
+                Assert.That(controller.IsPresentingItem, Is.False);
+                Assert.That(controller.Match.UsedCount, Is.Zero);
+                Assert.That(controller.View.SelectedItemId, Is.Null);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TimeBypassLargeMinuteSplitKeepsTotalAndNonnegativeCountersEveryFrame()
+        {
+            settings.Rules.InitialLifeHours = int.MaxValue / (2 * GameTime.MinutesPerHour);
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 7;
+            settings.TransferDuration = .4f;
+            settings.ResultHoldDuration = .4f;
+            foreach (int percent in new[] { 50, 100 })
+            {
+                settings.Rules.TimeBypassPercent = percent;
+                controller.RestartGame();
+                int total = controller.Match.PlayerLifeMinutes + controller.Match.AiLifeMinutes + controller.Match.BankMinutes;
+                int id = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.TimeBypass);
+                yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems);
+                controller.UseItem(id);
+                yield return WaitFor(() => !controller.IsPresentingItem);
+                yield return ClickClock(ReferenceClockIndex(ClockKind.Red));
+                yield return ChooseAction(TimeAction.Collect);
+                yield return WaitFor(() => controller.View.IsCountingTime);
+                Assert.That(controller.Match.BankMinutes, Is.EqualTo(percent == 50 ? 1410 : 1200));
+                yield return CheckCountingTotal(total);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TimeBypassTerminalCollectionShowsFinalSplitWithoutAwardingBank()
+        {
+            settings.Rules.InitialLifeHours = 11;
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            controller.RestartGame();
+            int id = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.TimeBypass);
+            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems);
+            controller.UseItem(id);
+            yield return WaitFor(() => !controller.IsPresentingItem);
+            yield return ClickClock(ReferenceClockIndex(ClockKind.Normal));
+            yield return ChooseAction(TimeAction.Collect);
+            yield return WaitFor(() => controller.View.IsResultVisible);
+            Assert.That(controller.Match.Winner, Is.EqualTo(GameWinner.Player));
+            Assert.That(controller.Match.PlayerLifeMinutes, Is.EqualTo(90));
+            Assert.That(controller.Match.AiLifeMinutes, Is.Zero);
+            Assert.That(controller.Match.BankMinutes, Is.EqualTo(1230));
+            Assert.That(controller.Match.HasTimeBypass, Is.False);
+            Assert.That(controller.Match.GetCurrentItemEffects(Participant.Player), Is.Empty);
+            AssertNumbers();
+        }
+
+        [UnityTest]
+        public IEnumerator SpareKeyPrivateChoiceUsesRealClockInputAndKeepsSettlementItems()
+        {
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.TransferDuration = .3f; settings.ResultHoldDuration = .4f;
+            foreach (bool reselect in new[] { false, true })
+            {
+                controller.RestartGame();
+                var match = controller.Match;
+                foreach (var kind in new[] { ItemKind.SpareKey, ItemKind.Screwdriver, ItemKind.TimeBypass })
+                    TimeTheftItemTestSetup.Give(match, Participant.Player, kind);
+                yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+                for (int i = 0; i < 3; i++)
+                {
+                    yield return PressItemKey(keyboard.iKey);
+                    yield return WaitFor(() => !controller.IsPresentingItem);
+                }
+                int red = ReferenceClockIndex(ClockKind.Red);
+                yield return ClickClock(red, keyDecision: true);
+                Assert.That(match.GetPrivateClock(Participant.Player, red).Value.Kind, Is.EqualTo(ClockKind.Red));
+                Assert.That(match.GetPrivateClock(Participant.Ai, red), Is.Null);
+                Assert.That(controller.View.PhaseLabel.text, Does.Contain("나만 확인").And.Contain("빨강 8h"));
+                controller.ChooseAction(TimeAction.Collect);
+                Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingKeyDecision));
+                if (reselect)
+                {
+                    yield return ClickClock(ReferenceClockIndex(ClockKind.Normal));
+                    Assert.That(controller.View.PhaseLabel.text, Does.Not.Contain("나만 확인"));
+                    Assert.That(match.GetClock(red).Visibility, Is.EqualTo(ClockVisibility.Hidden));
+                }
+                else yield return PressItemKey(keyboard.enterKey);
+                Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingAction));
+                Assert.That(match.ReselectPeekedClock(Participant.Player, 4), Is.False);
+                yield return ChooseAction(TimeAction.Collect);
+                yield return WaitFor(() => controller.View.IsCountingTime);
+                Assert.That(match.TransferredMinutes, Is.EqualTo(reselect ? 480 : 240));
+                Assert.That(match.LastItemEffects.Single(e => e.Source.Kind == ItemKind.TimeBypass).BypassedMinutes, Is.EqualTo(reselect ? 240 : 120));
+                Assert.That(controller.View.PhaseLabel.text, Does.Contain("여벌 열쇠 · 확인 효과 종료"));
+                yield return CheckCountingTotal(3600);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator AiSpareKeyKnowledgeNeverAppearsInPlayerView()
+        {
+            controller.enabled = false;
+            var match = new TimeTheftMatch(new GameRules { InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = Participant.Ai, MinimumHours = 8, MaximumHours = 8 }, new System.Random(63));
+            int key = TimeTheftItemTestSetup.Give(match, Participant.Ai, ItemKind.SpareKey);
+            match.BeginBatch(); match.CloseAndShuffle(); match.CompleteShuffle();
+            Assert.That(match.UseItem(Participant.Ai, key).Succeeded, Is.True);
+            Assert.That(match.SelectClock(Participant.Ai, 0), Is.True);
+            controller.View.OpenKeyDecision(match);
+            Assert.That(controller.View.PhaseLabel.text, Does.Not.Contain("8h").And.Not.Contain("나만 확인"));
+            Assert.That(controller.View.Clocks.All(c => !c.IsOpen && !c.SelectionTarget.InputEnabled), Is.True);
+            Assert.That(match.GetPrivateClock(Participant.Player, 0), Is.Null);
+            Assert.That(match.KeepPeekedClock(Participant.Ai), Is.True);
+            controller.View.OpenAction(match);
+            Assert.That(controller.View.PhaseLabel.text, Does.Not.Contain("8h").And.Not.Contain("나만 확인"));
+            Assert.That(controller.View.CollectButton.interactable, Is.False);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ScissorsUiShowsOnlyRemovedItemAndNoTargetDoesNotConsume()
+        {
+            foreach (bool withTarget in new[] { false, true })
+            {
+                controller.RestartGame();
+                var match = controller.Match;
+                int scissors = TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Scissors);
+                int target = withTarget ? TimeTheftItemTestSetup.Give(match, Participant.Ai, ItemKind.Handcuffs) : -1;
+                yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+                if (!withTarget)
+                {
+                    Assert.That(controller.View.SelectedItemId, Is.Null);
+                    Assert.That(controller.View.PhaseLabel.text, Does.Contain("제거할 상대 보유품 없음"));
+                    controller.UseItem(scissors);
+                    Assert.That(match.GetInventory(Participant.Player).Single().Id, Is.EqualTo(scissors));
+                    Assert.That(controller.View.PhaseLabel.text, Does.Contain("소모 안 됨"));
+                    controller.EndItemPhase();
+                }
+                else
+                {
+                    yield return PressItemKey(keyboard.iKey);
+                    Assert.That(controller.View.LastItemUse.Value.RemovedItem.Value.Id, Is.EqualTo(target));
+                    Assert.That(controller.View.PhaseLabel.text, Does.Contain("수갑 #" + target + " 제거 완료"));
+                    Assert.That(match.GetInventory(Participant.Ai), Is.Empty);
+                    Assert.That(match.GetCurrentItemEffects(Participant.Player), Is.Empty);
+                    yield return WaitFor(() => !controller.IsPresentingItem);
+                }
+                Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
+                yield return ClickClock(0);
+                yield return ChooseAction(TimeAction.Ration);
+                yield return WaitFor(() => match.Turn >= 3);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator DuckWaitsAcrossHandcuffSkipAndBlocksOnlyTheNextActualAiAction()
+        {
+            settings.AiThinkDuration = .4f;
+            controller.RestartGame();
+            var match = controller.Match;
+            TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.RubberDuck);
+            TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Handcuffs);
+            int aiDriver = TimeTheftItemTestSetup.Give(match, Participant.Ai, ItemKind.Screwdriver);
+            TimeTheftItemTestSetup.Give(match, Participant.Ai, ItemKind.SpareKey);
+            yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+            for (int i = 0; i < 2; i++)
+            {
+                yield return PressItemKey(keyboard.iKey);
+                yield return WaitFor(() => !controller.IsPresentingItem);
+            }
+            yield return ClickClock(0);
+            yield return ChooseAction(TimeAction.Ration);
+            yield return WaitFor(() => match.Turn == 3 && match.Stage == TurnStage.AwaitingClock);
+            Assert.That(match.ActiveParticipant, Is.EqualTo(Participant.Player));
+            Assert.That(match.UsedCount, Is.EqualTo(1));
+            Assert.That(match.IsItemUseBlocked(Participant.Ai), Is.False);
+            Assert.That(match.GetPendingItemEffects(Participant.Player).Single().Source.Kind, Is.EqualTo(ItemKind.RubberDuck));
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("상대 차례 생략"));
+            yield return ClickClock(1);
+            yield return ChooseAction(TimeAction.Ration);
+            yield return WaitFor(() => match.IsItemUseBlocked(Participant.Ai));
+            Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("아이템 사용 봉쇄"));
+            Assert.That(match.UseItem(Participant.Ai, aiDriver).Failure, Is.EqualTo(ItemUseFailure.UseNotAllowed));
+            Assert.That(match.GetInventory(Participant.Ai).Count, Is.EqualTo(2));
+            yield return WaitFor(() => match.Turn == 5 && match.Stage == TurnStage.AwaitingClock);
+            Assert.That(match.UsedCount, Is.EqualTo(3));
+            Assert.That(match.IsItemUseBlocked(Participant.Ai), Is.False);
+            Assert.That(match.GetPendingItemEffects(Participant.Player), Is.Empty);
+            AssertNumbers();
+            yield return ClickClock(match.GetAvailableClockIndices().First());
+            yield return ChooseAction(TimeAction.Ration);
+            yield return WaitFor(() => match.Stage == TurnStage.BatchPreview && match.Batch == 2);
+            Assert.That(match.UsedCount, Is.Zero);
+            AssertNumbers();
+        }
+
+        [UnityTest]
+        public IEnumerator AllFourNewItemStatesClearOnRestartAndDisableDuringPrivateChoice()
+        {
+            foreach (bool disable in new[] { false, true })
+            {
+                controller.RestartGame();
+                var old = controller.Match;
+                foreach (var kind in new[] { ItemKind.Scissors, ItemKind.SpareKey, ItemKind.RubberDuck, ItemKind.Handcuffs })
+                    TimeTheftItemTestSetup.Give(old, Participant.Player, kind);
+                TimeTheftItemTestSetup.Give(old, Participant.Ai, ItemKind.Screwdriver);
+                yield return WaitFor(() => old.Stage == TurnStage.AwaitingItems);
+                for (int i = 0; i < 4; i++)
+                {
+                    yield return PressItemKey(keyboard.iKey);
+                    yield return WaitFor(() => !controller.IsPresentingItem);
+                }
+                yield return ClickClock(0, keyDecision: true);
+                Assert.That(old.GetPendingItemEffects(Participant.Player).Count, Is.EqualTo(2));
+                if (disable) { controller.enabled = false; controller.enabled = true; }
+                else controller.RestartGame();
+                Assert.That(controller.Match, Is.Not.SameAs(old));
+                Assert.That(controller.Match.GetInventory(Participant.Player), Is.Empty);
+                Assert.That(controller.Match.GetPendingItemEffects(Participant.Player), Is.Empty);
+                Assert.That(controller.Match.GetCurrentItemEffects(Participant.Player), Is.Empty);
+                Assert.That(controller.Match.GetPrivateClock(Participant.Player, 0), Is.Null);
+                Assert.That(controller.Match.TurnItemEvents, Is.Empty);
+                Assert.That(controller.View.PhaseLabel.text, Does.Not.Contain("나만 확인"));
+                controller.KeepPeekedClock();
+                yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingClock);
+                Assert.That(controller.Match.UsedCount, Is.Zero);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator AiPreparedItemsFinishPrivateChoiceAndSkipBeforePlayerCommands()
+        {
+            settings.Rules.FirstParticipant = Participant.Ai;
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.AiThinkDuration = .4f;
+            controller.RestartGame();
+            var match = controller.Match;
+            var ids = new[] { ItemKind.SpareKey, ItemKind.RubberDuck, ItemKind.Handcuffs, ItemKind.Screwdriver, ItemKind.TimeBypass }
+                .Select(kind => TimeTheftItemTestSetup.Give(match, Participant.Ai, kind)).ToArray();
+            int playerItem = TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Scissors);
+            // 전용 fixture가 AI의 A 사용만 준비한다. 제품 ChooseItem 전략은 그대로 null이다.
+            controller.StopAllCoroutines();
+            Assert.That(match.CloseAndShuffle(), Is.True);
+            Assert.That(match.CompleteShuffle(), Is.True);
+            foreach (int id in ids) Assert.That(match.UseItem(Participant.Ai, id).Succeeded, Is.True);
+            controller.StartCoroutine("OpenTurn");
+            yield return WaitFor(() => match.Stage == TurnStage.AwaitingAction);
+            Assert.That(match.GetPrivateClock(Participant.Ai, match.CurrentClock).HasValue, Is.True);
+            Assert.That(match.GetPrivateClock(Participant.Player, match.CurrentClock), Is.Null);
+            Assert.That(controller.View.PhaseLabel.text, Does.Not.Contain("나만 확인").And.Not.Contain("8h"));
+            Assert.That(controller.View.Clocks.All(c => !c.IsOpen), Is.True);
+            yield return WaitFor(() => match.Turn == 3 && match.Stage == TurnStage.AwaitingClock);
+            Assert.That(match.ActiveParticipant, Is.EqualTo(Participant.Ai));
+            Assert.That(match.UsedCount, Is.EqualTo(1));
+            Assert.That(match.TurnItemEvents.Single().Target, Is.EqualTo(Participant.Player));
+            Assert.That(match.GetPendingItemEffects(Participant.Ai).Single().Source.Kind, Is.EqualTo(ItemKind.RubberDuck));
+            Assert.That(match.IsItemUseBlocked(Participant.Player), Is.False);
+            yield return WaitFor(() => match.IsItemUseBlocked(Participant.Player));
+            Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
+            Assert.That(match.UsedCount, Is.EqualTo(2));
+            Assert.That(match.CheckItemUse(Participant.Player, playerItem), Is.EqualTo(ItemUseFailure.UseNotAllowed));
+            Assert.That(controller.View.PhaseLabel.text, Does.Contain("나 아이템 사용 봉쇄").And.Not.Contain("나만 확인"));
+            yield return ClickClock(match.GetAvailableClockIndices().First());
+            yield return ChooseAction(TimeAction.Ration);
+            yield return WaitFor(() => match.Turn == 5 && match.Stage == TurnStage.AwaitingClock);
+            Assert.That(match.IsItemUseBlocked(Participant.Player), Is.False);
+            Assert.That(match.GetPendingItemEffects(Participant.Ai), Is.Empty);
+            AssertNumbers();
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+        }
+
+        [UnityTest]
+        public IEnumerator AutomaticGrantsCarryToNewBatchesRespectCapAndReplayOnRestart()
+        {
+            EnableAutomaticGrants();
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 1;
+            foreach (var first in new[] { Participant.Player, Participant.Ai })
+            {
+                settings.Rules.FirstParticipant = first;
+                controller.RestartGame();
+                var match = controller.Match;
+                var initial = match.GetInventory(Participant.Player).Concat(match.GetInventory(Participant.Ai)).ToArray();
+                Assert.That(initial.Length, Is.EqualTo(4));
+                Assert.That(initial.All(item => !item.IsFoundationTest && !item.IsConsumed), Is.True);
+                Assert.That(initial.Select(item => item.Id).Distinct().Count(), Is.EqualTo(4));
+                Assert.That(match.LastItemGrants.Sum(g => g.GrantedItems.Count), Is.EqualTo(4));
+                Assert.That(controller.View.InventoryLabel.text, Does.Contain("나 보유 (2)").And.Contain("상대 보유 (2)").And.Contain("나 +2"));
+                Assert.That(controller.View.InventoryLabel.raycastTarget, Is.False);
+                Assert.That(match.BeginBatch(), Is.False);
+                Assert.That(match.GetInventory(Participant.Player).Count, Is.EqualTo(2));
+                yield return ReachGrantedBatch(2);
+                Assert.That(match.GetInventory(Participant.Player).Count, Is.EqualTo(3));
+                Assert.That(match.GetInventory(Participant.Ai).Count, Is.EqualTo(3));
+                Assert.That(match.LastItemGrants.All(g => g.GrantedItems.Count == 1 && g.Batch == 2), Is.True);
+                Assert.That(controller.View.InventoryLabel.text, Does.Contain("나 +1").And.Contain("상대 +1"));
+                var cappedIds = match.GetInventory(Participant.Player).Concat(match.GetInventory(Participant.Ai)).Select(item => item.Id).ToArray();
+                yield return ReachGrantedBatch(3);
+                Assert.That(match.LastItemGrants.All(g => g.GrantedItems.Count == 0 && g.SkippedCount == 1), Is.True);
+                Assert.That(match.GetInventory(Participant.Player).Concat(match.GetInventory(Participant.Ai)).Select(item => item.Id), Is.EqualTo(cappedIds));
+                Assert.That(controller.View.InventoryLabel.text, Does.Contain("보유 상한"));
+                controller.RestartGame();
+                Assert.That(controller.Match.Batch, Is.EqualTo(1));
+                Assert.That(controller.Match.GetInventory(Participant.Player).Concat(controller.Match.GetInventory(Participant.Ai)), Is.EqualTo(initial));
+                Assert.That(controller.Match.LastItemGrants.All(g => g.Batch == 1 && g.GrantedItems.Count == 2), Is.True);
+                Assert.That(controller.View.LastItemUse, Is.Null);
+                AssertNumbers();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator AutomaticallyGrantedItemsUseSequentiallyThenRefillWithoutTestInjection()
+        {
+            EnableAutomaticGrants();
+            settings.RandomSeed = 13;
+            settings.Rules.InitialLifeHours = 100;
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.TransferDuration = .3f; settings.ResultHoldDuration = .4f;
+            controller.RestartGame();
+            var match = controller.Match;
+            Assert.That(match.GetInventory(Participant.Player).Select(item => item.Kind), Is.EquivalentTo(new[] { ItemKind.Screwdriver, ItemKind.TimeBypass }));
+            var aiItems = match.GetInventory(Participant.Ai).ToArray();
+            yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+            for (int i = 0; i < 2; i++)
+            {
+                yield return PressItemKey(keyboard.iKey);
+                Assert.That(controller.View.InventoryLabel.text, Does.Contain("소모"));
+                yield return WaitFor(() => !controller.IsPresentingItem);
+                Assert.That(match.GetInventory(Participant.Player).Count, Is.EqualTo(1 - i));
+            }
+            Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
+            Assert.That(controller.View.InventoryLabel.text, Does.Contain("나 보유 (0) · 없음").And.Contain("상대 보유 (2)"));
+            yield return ClickClock(ReferenceClockIndex(ClockKind.Red));
+            yield return ChooseAction(TimeAction.Collect);
+            yield return WaitFor(() => controller.View.IsCountingTime);
+            Assert.That(match.TransferredMinutes, Is.EqualTo(240));
+            Assert.That(match.LastItemEffects.Single(e => e.Source.Kind == ItemKind.TimeBypass).BypassedMinutes, Is.EqualTo(120));
+            yield return CheckCountingTotal(12000);
+            yield return WaitFor(() => match.Turn == 3 && match.Stage == TurnStage.AwaitingClock);
+            Assert.That(match.GetInventory(Participant.Ai), Is.EqualTo(aiItems));
+            Assert.That(match.GetInventory(Participant.Player), Is.Empty);
+            yield return ReachGrantedBatch(2);
+            Assert.That(match.GetInventory(Participant.Player).Count, Is.EqualTo(1));
+            Assert.That(match.GetInventory(Participant.Ai).Count, Is.EqualTo(3));
+            Assert.That(controller.View.InventoryLabel.text, Does.Contain("나 보유 (1)").And.Contain("상대 보유 (3)"));
+            AssertNumbers();
+        }
+
+        [UnityTest]
+        public IEnumerator AutomaticScissorsRemovalUpdatesPublicInventoryAndRefillCapacity()
+        {
+            EnableAutomaticGrants();
+            settings.RandomSeed = 4;
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 1;
+            controller.RestartGame();
+            var match = controller.Match;
+            var targets = match.GetInventory(Participant.Ai).Select(item => item.Id).ToArray();
+            yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+            Assert.That(match.GetInventory(Participant.Player).First().Kind, Is.EqualTo(ItemKind.Scissors));
+            yield return PressItemKey(keyboard.iKey);
+            var removed = controller.View.LastItemUse.Value.RemovedItem.Value;
+            Assert.That(targets.Contains(removed.Id), Is.True);
+            Assert.That(controller.View.InventoryLabel.text, Does.Contain("나 보유 (1)").And.Contain("상대 보유 (1)").And.Contain("제거"));
+            yield return WaitFor(() => !controller.IsPresentingItem);
+            var remaining = match.GetInventory(Participant.Player).Single();
+            Assert.That(match.UseItem(Participant.Player, controller.View.LastItemUse.Value.ItemId).Failure, Is.EqualTo(ItemUseFailure.AlreadyConsumed));
+            Assert.That(match.GetInventory(Participant.Player).Single(), Is.EqualTo(remaining));
+            yield return ReachGrantedBatch(2);
+            Assert.That(match.GetInventory(Participant.Player).Count, Is.EqualTo(2));
+            Assert.That(match.GetInventory(Participant.Ai).Count, Is.EqualTo(2));
+            Assert.That(match.GetInventory(Participant.Ai).Any(item => item.Id == removed.Id), Is.False);
+            Assert.That(controller.View.InventoryLabel.text, Does.Contain("나 보유 (2)").And.Contain("상대 보유 (2)"));
+            AssertNumbers();
+        }
+
+        [UnityTest]
+        public IEnumerator InventoryVisibilitySettingHidesOnlyOpponentKindsAndAiKeepsItsGrant()
+        {
+            EnableAutomaticGrants();
+            settings.Rules.FirstParticipant = Participant.Ai;
+            settings.Rules.RevealOpponentItems = false;
+            settings.Rules.ItemWeights = new[] { 0, 0, 0, 0, 0, 1 };
+            controller.RestartGame();
+            var match = controller.Match;
+            string opponentLine = controller.View.InventoryLabel.text.Split('\n')[1];
+            Assert.That(opponentLine, Does.Contain("상대 보유 (2)").And.Contain("종류 비공개").And.Not.Contain("수갑"));
+            Assert.That(controller.View.InventoryLabel.text.Split('\n')[0], Does.Contain("수갑×2"));
+            var observation = match.ObserveItems(Participant.Ai);
+            Assert.That(observation.OpponentInventory.Count, Is.EqualTo(2));
+            Assert.That(observation.OpponentInventory.Kinds, Is.Empty);
+            Assert.That(observation.OwnItems.All(item => item.Owner == Participant.Ai), Is.True);
+            yield return WaitFor(() => match.Turn == 2 && match.Stage == TurnStage.AwaitingItems);
+            Assert.That(match.GetInventory(Participant.Ai).Count, Is.EqualTo(2));
+            Assert.That(match.GetPendingItemEffects(Participant.Ai), Is.Empty);
+            Assert.That(Enumerable.Range(0, 5).All(i => !match.GetClock(i).Face.HasValue), Is.True);
+            Assert.That(match.ObserveItems(Participant.Ai).PublicGame, Is.EqualTo(match.Observe(Participant.Ai)));
+            AssertNumbers();
+        }
+
+        private void EnableAutomaticGrants()
+        {
+            settings.Rules.InitialItemCount = 2;
+            settings.Rules.ItemsPerBatch = 1;
+            settings.Rules.MaxHeldItems = 3;
+            settings.Rules.RevealOpponentItems = true;
+            settings.Rules.ItemWeights = new int[0];
+        }
+
+        private IEnumerator ReachGrantedBatch(int targetBatch)
+        {
+            float deadline = Time.realtimeSinceStartup + 15;
+            while (controller.Match.Batch < targetBatch && Time.realtimeSinceStartup < deadline)
+            {
+                var match = controller.Match;
+                Assert.That(match.Winner, Is.EqualTo(GameWinner.None));
+                if (match.Stage == TurnStage.AwaitingItems && match.ActiveParticipant == Participant.Player) controller.EndItemPhase();
+                if (match.Stage == TurnStage.AwaitingClock && match.ActiveParticipant == Participant.Player)
+                {
+                    yield return ClickClock(match.GetAvailableClockIndices().Last());
+                    yield return ChooseAction(TimeAction.Ration);
+                }
+                yield return null;
+            }
+            Assert.That(controller.Match.Batch, Is.EqualTo(targetBatch));
+        }
+
+        [UnityTest]
+        public IEnumerator AiStrategyUsesDriverAndBypassThenAppliesTheirRealSettlement()
+        {
+            EnableItemStrategy();
+            settings.Rules.FirstParticipant = Participant.Ai;
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.Rules.ExtraRedProbability = 0;
+            settings.AiThinkDuration = .4f;
+            controller.RestartGame();
+            var match = controller.Match;
+            TimeTheftItemTestSetup.Give(match, Participant.Ai, ItemKind.Screwdriver);
+            TimeTheftItemTestSetup.Give(match, Participant.Ai, ItemKind.TimeBypass);
+            yield return WaitFor(() => match.Stage == TurnStage.AwaitingClock && match.GetInventory(Participant.Ai).Count == 0);
+            Assert.That(match.HasScrewdriverProtection && match.HasTimeBypass, Is.True);
+            Assert.That(controller.View.LastItemUse.Value.Actor, Is.EqualTo(Participant.Ai));
+            Assert.That(controller.View.InventoryLabel.text, Does.Contain("상대 보유 (0)"));
+            yield return WaitFor(() => controller.View.IsCountingTime);
+            Assert.That(match.Action, Is.EqualTo(TimeAction.Collect));
+            Assert.That(match.LastItemEffects.Count, Is.EqualTo(2));
+            Assert.That(match.LastTransfers.Count, Is.EqualTo(2));
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+            Assert.That(match.GetCurrentItemEffects(Participant.Ai), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator AiStrategyResolvesItsKeyChoiceWithoutDisplayingPrivateInformation()
+        {
+            EnableItemStrategy();
+            settings.Rules.FirstParticipant = Participant.Ai;
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
+            settings.Rules.ExtraRedProbability = 1;
+            settings.AiThinkDuration = .4f;
+            controller.RestartGame();
+            var match = controller.Match;
+            TimeTheftItemTestSetup.Give(match, Participant.Ai, ItemKind.SpareKey);
+            yield return WaitFor(() => match.Stage == TurnStage.AwaitingAction);
+            var info = match.ObserveItems(Participant.Ai);
+            Assert.That(info.KnownClocks.Count, Is.EqualTo(1));
+            Assert.That(match.GetInventory(Participant.Ai), Is.Empty);
+            Assert.That(match.ObserveItems(Participant.Player).KnownClocks, Is.Empty);
+            Assert.That(controller.View.PhaseLabel.text, Does.Not.Contain("나만 확인").And.Not.Contain("8h"));
+            Assert.That(controller.View.Clocks.All(c => !c.IsOpen), Is.True);
+            if (info.CurrentClock != info.KnownClocks[0].Index) Assert.That(match.GetPrivateClock(Participant.Ai, info.CurrentClock), Is.Null);
+            Assert.That(match.ReselectPeekedClock(Participant.Ai, 4), Is.False);
+            yield return WaitFor(() => match.UsedCount == 1);
+            Assert.That(match.GetCurrentItemEffects(Participant.Ai), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator AiStrategyCombinesDuckAndHandcuffsWithoutSpendingDuckOnSkip()
+        {
+            EnableItemStrategy();
+            settings.Rules.FirstParticipant = Participant.Ai;
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 1;
+            settings.Rules.ExtraRedProbability = 0;
+            settings.AiThinkDuration = .3f;
+            controller.RestartGame();
+            var match = controller.Match;
+            TimeTheftItemTestSetup.Give(match, Participant.Ai, ItemKind.RubberDuck);
+            TimeTheftItemTestSetup.Give(match, Participant.Ai, ItemKind.Handcuffs);
+            foreach (var kind in new[] { ItemKind.Handcuffs, ItemKind.Screwdriver, ItemKind.TimeBypass })
+                TimeTheftItemTestSetup.Give(match, Participant.Player, kind);
+            yield return WaitFor(() => match.Turn == 3 && match.Stage == TurnStage.AwaitingClock);
+            Assert.That(match.ActiveParticipant, Is.EqualTo(Participant.Ai));
+            Assert.That(match.UsedCount, Is.EqualTo(1));
+            Assert.That(match.GetInventory(Participant.Ai), Is.Empty);
+            Assert.That(match.GetPendingItemEffects(Participant.Ai).Single().Source.Kind, Is.EqualTo(ItemKind.RubberDuck));
+            Assert.That(match.IsItemUseBlocked(Participant.Player), Is.False);
+            yield return WaitFor(() => match.IsItemUseBlocked(Participant.Player));
+            Assert.That(match.GetInventory(Participant.Player).Count, Is.EqualTo(3));
+            Assert.That(TimeTheftAi.ChooseItem(match.ObserveItems(Participant.Player), new System.Random(1)), Is.Null);
+            yield return ClickClock(match.GetAvailableClockIndices().First());
+            yield return ChooseAction(TimeAction.Ration);
+            yield return WaitFor(() => match.Turn == 5 && match.Stage == TurnStage.AwaitingClock);
+            Assert.That(match.GetPendingItemEffects(Participant.Ai), Is.Empty);
+            Assert.That(match.IsItemUseBlocked(Participant.Player), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator ActiveAiStrategyDoesNotUseItemsOnBlockedOrSkippedTurns()
+        {
+            EnableItemStrategy();
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 1;
+            settings.AiThinkDuration = .4f;
+            controller.RestartGame();
+            var match = controller.Match;
+            TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.RubberDuck);
+            TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Handcuffs);
+            foreach (var kind in new[] { ItemKind.SpareKey, ItemKind.Screwdriver, ItemKind.TimeBypass })
+                TimeTheftItemTestSetup.Give(match, Participant.Ai, kind);
+            var held = match.GetInventory(Participant.Ai).ToArray();
+            yield return WaitFor(() => match.Stage == TurnStage.AwaitingItems);
+            for (int i = 0; i < 2; i++)
+            {
+                yield return PressItemKey(keyboard.iKey);
+                yield return WaitFor(() => !controller.IsPresentingItem);
+            }
+            yield return ClickClock(0); yield return ChooseAction(TimeAction.Ration);
+            yield return WaitFor(() => match.Turn == 3 && match.Stage == TurnStage.AwaitingClock);
+            Assert.That(match.GetInventory(Participant.Ai), Is.EqualTo(held));
+            yield return ClickClock(1); yield return ChooseAction(TimeAction.Ration);
+            yield return WaitFor(() => match.IsItemUseBlocked(Participant.Ai));
+            Assert.That(match.ObserveItems(Participant.Ai).UsableItemIds, Is.Empty);
+            Assert.That(TimeTheftAi.ChooseItem(match.ObserveItems(Participant.Ai), new System.Random(1)), Is.Null);
+            Assert.That(match.GetInventory(Participant.Ai), Is.EqualTo(held));
+            yield return WaitFor(() => match.Turn == 5 && match.Stage == TurnStage.AwaitingClock);
+            Assert.That(match.GetInventory(Participant.Ai), Is.EqualTo(held));
+        }
+
+        [UnityTest]
+        public IEnumerator RestartAndDisableCancelAiStrategyDuringItemPresentation()
+        {
+            EnableItemStrategy(); EnableAutomaticGrants();
+            settings.Rules.FirstParticipant = Participant.Ai;
+            settings.Rules.ItemWeights = new[] { 0, 0, 0, 0, 0, 1 };
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 1;
+            settings.Rules.ExtraRedProbability = 0;
+            foreach (bool disable in new[] { false, true })
+            {
+                controller.enabled = true;
+                controller.RestartGame();
+                var old = controller.Match;
+                yield return WaitFor(() => controller.IsPresentingItem && controller.View.LastItemUse.HasValue);
+                Assert.That(controller.View.LastItemUse.Value.Actor, Is.EqualTo(Participant.Ai));
+                int oldCount = old.GetInventory(Participant.Ai).Count;
+                Assert.That(oldCount, Is.EqualTo(1));
+                if (disable) { controller.enabled = false; controller.enabled = true; }
+                else controller.RestartGame();
+                Assert.That(controller.Match, Is.Not.SameAs(old));
+                Assert.That(controller.IsPresentingItem, Is.False);
+                Assert.That(controller.Match.GetInventory(Participant.Ai).Count, Is.EqualTo(2));
+                Assert.That(controller.Match.GetPendingItemEffects(Participant.Ai), Is.Empty);
+                controller.enabled = false;
+                yield return null;
+                Assert.That(old.GetInventory(Participant.Ai).Count, Is.EqualTo(oldCount));
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator MainGameWithAutomaticGrantsAndActiveAiStrategyFinishes()
+        {
+            EnableAutomaticGrants();
+            settings.Rules.EnableAiItemStrategy = true;
+            settings.RandomSeed = 7;
+            controller.RestartGame();
+            var aiUses = new System.Collections.Generic.HashSet<int>();
+            float deadline = Time.realtimeSinceStartup + 90;
+            while (!controller.View.IsResultVisible && Time.realtimeSinceStartup < deadline)
+            {
+                var match = controller.Match;
+                if (controller.View.LastItemUse.HasValue && controller.View.LastItemUse.Value.Actor == Participant.Ai)
+                    aiUses.Add(controller.View.LastItemUse.Value.ItemId);
+                if (match.ActiveParticipant == Participant.Player && match.Stage == TurnStage.AwaitingItems) controller.EndItemPhase();
+                if (match.ActiveParticipant == Participant.Player && match.Stage == TurnStage.AwaitingClock)
+                {
+                    yield return ClickClock(match.GetAvailableClockIndices().Last());
+                    yield return ChooseAction(TimeAction.Collect);
+                }
+                Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+                yield return null;
+            }
+            Assert.That(controller.View.IsResultVisible, Is.True);
+            Assert.That(aiUses.Count, Is.GreaterThan(0));
+            Assert.That(controller.Match.GetPendingItemEffects(Participant.Ai), Is.Empty);
+            AssertNumbers();
+        }
+
+        private void EnableItemStrategy()
+        {
+            settings.Rules.EnableAiItemStrategy = true;
+            settings.Rules.AiDecisionNoise = 0;
+            settings.Rules.AiItemConservation = 0;
+        }
+
+        private IEnumerator CheckCountingTotal(int total)
+        {
+            while (controller.View.IsCountingTime)
+            {
+                int player = Read(controller.View.PlayerLife), ai = Read(controller.View.AiLife), bank = Read(controller.View.Bank);
+                Assert.That(player + ai + bank, Is.EqualTo(total));
+                Assert.That(player, Is.GreaterThanOrEqualTo(0));
+                Assert.That(ai, Is.GreaterThanOrEqualTo(0));
+                Assert.That(bank, Is.GreaterThanOrEqualTo(0));
+                yield return null;
+            }
+        }
+
+        private int ReferenceClockIndex(ClockKind kind)
+        {
+            // 재현용 독립 모델은 테스트 오라클이다. 게임/AI의 비공개 API를 넓히지 않는다.
+            for (int i = 0; i < 5; i++)
+            {
+                var reference = new TimeTheftMatch(settings.Rules, new System.Random(settings.RandomSeed));
+                reference.BeginBatch(); reference.CloseAndShuffle(); reference.CompleteShuffle();
+                if (reference.Stage == TurnStage.AwaitingItems) reference.EndItemPhase(settings.Rules.FirstParticipant);
+                reference.SelectClock(settings.Rules.FirstParticipant, i);
+                reference.CommitAction(settings.Rules.FirstParticipant, TimeAction.Collect);
+                if (reference.GetClock(i).Face.Value.Kind == kind) return i;
+            }
+            throw new InvalidOperationException("종류별 시계가 보장되어야 합니다.");
+        }
+
+        private IEnumerator PressItemKey(UnityEngine.InputSystem.Controls.KeyControl key)
+        {
+            input.Press(key); InputSystem.Update(); controller.SendMessage("Update");
+            input.Release(key); InputSystem.Update();
+            yield return null;
+        }
+
         private IEnumerator ChooseAction(TimeAction action)
         {
             var match = controller.Match;
             int selected = match.CurrentClock;
             Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingAction));
             Assert.That(selected, Is.InRange(0, 4));
-            yield return TabletopDecisionUITestInput.Click(input, mouse,
+            yield return GameUiTestInput.Click(input, mouse,
                 action == TimeAction.Ration ? controller.View.RationButton : controller.View.CollectButton, null, () =>
                 {
                     Assert.That(match.Stage, Is.EqualTo(TurnStage.Revealing));
@@ -365,7 +1400,7 @@ namespace TimeTheft.Tests
                 });
         }
 
-        private IEnumerator ClickClock(int index, Action afterPress = null)
+        private IEnumerator ClickClock(int index, Action afterPress = null, bool keyDecision = false)
         {
             yield return WaitFor(() => !focus.IsTransitioning);
             var token = controller.View.Clocks[index];
@@ -385,13 +1420,13 @@ namespace TimeTheft.Tests
             input.Press(mouse.leftButton);
             yield return null;
             Assert.That(controller.Match.CurrentClock, Is.EqualTo(index));
-            Assert.That(controller.Match.Stage, Is.EqualTo(TurnStage.AwaitingAction));
+            Assert.That(controller.Match.Stage, Is.EqualTo(keyDecision ? TurnStage.AwaitingKeyDecision : TurnStage.AwaitingAction));
             Assert.That(controller.View.Clocks.All(c => !c.IsOpen && c.Number.text == "" && c.Kind.text == ""), Is.True);
             Assert.That(Enumerable.Range(0, 5).All(i => !controller.Match.GetClock(i).Face.HasValue), Is.True);
             Assert.That(controller.View.Clocks.Count(c => c.IsSelected), Is.EqualTo(1));
             Assert.That(token.IsSelected, Is.True);
             Assert.That(token.transform.Find("Visual").localPosition.z, Is.LessThan(0));
-            Assert.That(controller.View.CollectButton.interactable && controller.View.RationButton.interactable, Is.True);
+            Assert.That(controller.View.CollectButton.interactable && controller.View.RationButton.interactable, Is.EqualTo(!keyDecision));
             afterPress?.Invoke();
             input.Release(mouse.leftButton);
             yield return null;
@@ -420,11 +1455,12 @@ namespace TimeTheft.Tests
             var parts = label.text.Split(':');
             return int.Parse(parts[0]) * 60 + int.Parse(parts[1]);
         }
-        private static IEnumerator WaitFor(Func<bool> predicate)
+        private IEnumerator WaitFor(Func<bool> predicate)
         {
             float deadline = Time.realtimeSinceStartup + 6;
             while (!predicate() && Time.realtimeSinceStartup < deadline) yield return null;
-            Assert.That(predicate(), Is.True, "진행 제한시간");
+            Assert.That(predicate(), Is.True, "진행 제한시간 · " + (controller && controller.Match != null
+                ? controller.Match.Stage + " / turn " + controller.Match.Turn + " / " + controller.Match.ActiveParticipant : "Controller 없음"));
         }
     }
 }

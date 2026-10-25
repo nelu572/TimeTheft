@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace TimeTheft
 {
-    // 선택 의미와 게임 규칙은 ClockView가 소유하고, 이 컴포넌트는 물건의 반응만 담당한다.
+    // 계수기 Study에 보존한 구형 표시물의 반응만 담당한다. 게임 규칙은 처리하지 않는다.
     public sealed class TabletopDecisionObject : MonoBehaviour
     {
         [SerializeField] private TabletopFocusTarget target;

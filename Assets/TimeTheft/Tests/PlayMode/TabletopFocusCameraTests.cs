@@ -49,7 +49,7 @@ namespace TimeTheft.Tests
             yield return null;
             look.SendMessage("OnApplicationFocus", true);
             focus.SendMessage("OnApplicationFocus", true);
-            Assert.That(Object.FindObjectsByType<PrototypeController>(FindObjectsSortMode.None), Is.Empty);
+            Assert.That(Object.FindObjectsByType<TimeTheftGameController>(FindObjectsSortMode.None), Is.Empty);
         }
 
         [UnityTearDown]
@@ -84,7 +84,7 @@ namespace TimeTheft.Tests
                     : target.transform.position;
                 for (int sample = 0; sample < 20; sample++)
                 {
-                    PointAt(camera.WorldToScreenPoint(aim));
+                    ProcessPointer(camera.WorldToScreenPoint(aim));
                     yield return null;
                 }
                 Assert.That(focus.HoveredTarget, Is.SameAs(target), target.name);
@@ -92,8 +92,11 @@ namespace TimeTheft.Tests
                 Assert.That(renderer.color.maxColorComponent, Is.GreaterThan(originalColor.maxColorComponent));
                 Vector3 before = camera.transform.position;
                 input.Press(mouse.leftButton);
+                InputSystem.Update();
+                focus.SendMessage("Update");
                 yield return null;
                 input.Release(mouse.leftButton);
+                InputSystem.Update();
                 Assert.That(focus.CurrentTarget, Is.SameAs(target), target.name);
                 Assert.That(look.IsHoverLocked, Is.False, "클릭 집중이 호버 잠금보다 우선한다");
                 Assert.That(Vector3.Distance(before, camera.transform.position), Is.LessThan(.3f), "클릭 시 순간 이동");
@@ -105,12 +108,16 @@ namespace TimeTheft.Tests
                 PointAt(camera.pixelRect.max - Vector2.one);
                 yield return new WaitForSecondsRealtime(.2f);
                 Assert.That(Vector3.Distance(camera.transform.position, target.FocusPoint.position), Is.LessThan(.001f), "집중 중 추적 중지");
-                PointAt(camera.pixelRect.max + Vector2.one * 10);
+                ProcessPointer(camera.pixelRect.max + Vector2.one * 10);
                 if (i % 2 == 0) input.Press(mouse.rightButton);
                 else input.Press(keyboard.escapeKey);
+                // 테스트 장치 이벤트를 즉시 전달해 비활성 Editor의 프레임 타이밍에 의존하지 않는다.
+                InputSystem.Update();
+                focus.SendMessage("Update");
                 yield return null;
                 input.Release(mouse.rightButton);
                 input.Release(keyboard.escapeKey);
+                InputSystem.Update();
                 yield return new WaitForSecondsRealtime(.85f);
                 AssertHome();
             }

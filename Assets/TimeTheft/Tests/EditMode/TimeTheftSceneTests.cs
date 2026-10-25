@@ -19,10 +19,8 @@ namespace TimeTheft.Tests
                 var roots = scene.GetRootGameObjects();
                 var controllers = roots.SelectMany(r => r.GetComponentsInChildren<TimeTheftGameController>(true)).ToArray();
                 Assert.That(controllers, Has.Length.EqualTo(1));
-                Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<TabletopGameController>(true)), Is.Empty);
-                Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<TabletopGameView>(true)), Is.Empty);
-                Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<TabletopDecisionUI>(true)), Is.Empty);
-                Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<TabletopRoundFeedback>(true)), Is.Empty);
+                Assert.That(roots.SelectMany(r => r.GetComponentsInChildren<MonoBehaviour>(true))
+                    .Where(b => b && AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(b)).Contains("/Legacy/")), Is.Empty);
                 var view = controllers[0].GetComponent<TimeTheftGameView>();
                 Assert.That(controllers[0].Settings, Is.Not.Null);
                 Assert.That(view.Clocks, Has.Length.EqualTo(5));
@@ -52,17 +50,15 @@ namespace TimeTheft.Tests
         }
 
         [Test]
-        public void EveryPreservedSceneHasValidScriptsAndBuildStartsAtMainOnly()
+        public void MainAndStudyScenesHaveValidScriptsAndBuildStartsAtMainOnly()
         {
-            foreach (string path in new[] { "TimeTheftGame", "TabletopGame", "TabletopStudy", "SampleScene", "CounterStructureStudy" })
+            foreach (string path in new[] { "TimeTheftGame", "TabletopStudy", "CounterStructureStudy" })
             {
                 var scene = EditorSceneManager.OpenPreviewScene("Assets/Scenes/" + path + ".unity");
                 try
                 {
                     foreach (var go in scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<Transform>(true)))
                         Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(go.gameObject), Is.Zero, path + "/" + go.name);
-                    var legacy = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<TabletopGameController>(true)).ToArray();
-                    Assert.That(legacy.Length, Is.EqualTo(path == "TabletopGame" ? 1 : 0));
                 }
                 finally { EditorSceneManager.ClosePreviewScene(scene); }
             }
