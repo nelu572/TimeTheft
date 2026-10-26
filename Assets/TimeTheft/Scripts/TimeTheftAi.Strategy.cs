@@ -23,15 +23,24 @@ namespace TimeTheft
                     { candidates.Add(item); break; }
             if (candidates.Count == 0) return null;
             int active = ActiveEffects(info);
-            double baseline = PlanValue(info, active, 0);
+            var scores = new Dictionary<int, double>();
+            var forecasts = new Dictionary<int, FutureForecast>();
+            Func<int, double> planValue = added =>
+            {
+                double score;
+                if (!scores.TryGetValue(added, out score))
+                { score = EvaluatePlan(info, active | added, added, forecasts); scores.Add(added, score); }
+                return score;
+            };
+            double baseline = planValue(0);
             double best = baseline + Math.Max(1, Scale(info) * .01);
             int? selected = null;
             for (int i = 0; i < candidates.Count; i++)
             {
-                ConsiderPlan(info, random, active, Bit(candidates[i].Kind), candidates[i].Id, baseline, ref best, ref selected);
+                ConsiderPlan(info, random, Bit(candidates[i].Kind), candidates[i].Id, baseline, planValue, ref best, ref selected);
                 for (int j = i + 1; j < candidates.Count; j++)
-                    ConsiderPlan(info, random, active, Bit(candidates[i].Kind) | Bit(candidates[j].Kind), candidates[i].Id,
-                        baseline, ref best, ref selected);
+                    ConsiderPlan(info, random, Bit(candidates[i].Kind) | Bit(candidates[j].Kind), candidates[i].Id,
+                        baseline, planValue, ref best, ref selected);
             }
             // 세 아이템의 정산/정보 시너지만 추가한다. 전체 조합이나 여러 차례를 완전 탐색하지 않는다.
             int triple = Bit(ItemKind.SpareKey) | Bit(ItemKind.Screwdriver) | Bit(ItemKind.TimeBypass);
@@ -42,14 +51,21 @@ namespace TimeTheft
                 if (firstTripleId < 0 && (triple & Bit(candidate.Kind)) != 0) firstTripleId = candidate.Id;
             }
             if ((available & triple) == triple)
-                ConsiderPlan(info, random, active, triple, firstTripleId, baseline, ref best, ref selected);
+                ConsiderPlan(info, random, triple, firstTripleId, baseline, planValue, ref best, ref selected);
             return selected;
         }
 
-        private static void ConsiderPlan(AiItemObservation info, Random random, int active, int added, int firstId,
-            double baseline, ref double best, ref int? selected)
+        private static void ConsiderPlan(AiItemObservation info, Random random, int added, int firstId,
+            double baseline, Func<int, double> planValue, ref double best, ref int? selected)
         {
-            double score = PlanValue(info, active | added, added);
+            double score = planValue(added);
+            foreach (ItemKind kind in Enum.GetValues(typeof(ItemKind)))
+            {
+                if (!Has(added, kind)) continue;
+                int withoutItem = added & ~Bit(kind);
+                // 다른 품목의 이득이나 계획별 잡음 때문에 순기여 없는 아이템까지 소모하지 않는다.
+                if (score <= planValue(withoutItem) + .0001) return;
+            }
             // 잡음은 실제 이득이 있는 계획 사이의 선호만 바꾼다. 무효 사용을 만들지 않는다.
             if (score <= baseline + Math.Max(1, Scale(info) * .01)) return;
             score += Noise(info, random);
@@ -119,6 +135,9 @@ namespace TimeTheft
             Calculate(info, face, action, ActiveEffects(info), false);
 
         private static double PlanValue(AiItemObservation info, int effects, int added)
+            => EvaluatePlan(info, effects, added, null);
+
+        private static double EvaluatePlan(AiItemObservation info, int effects, int added, Dictionary<int, FutureForecast> forecasts)
         {
             double value = SelectionValue(info, effects);
             bool scissors = Has(added, ItemKind.Scissors);
@@ -126,24 +145,29 @@ namespace TimeTheft
             bool cuffs = Has(added, ItemKind.Handcuffs) || Pending(info, ItemKind.Handcuffs);
             int count = Math.Max(0, info.OpponentInventory.Count - (scissors ? 1 : 0));
             double threat = AverageOpponentThreat(info);
-            double futureValue = 0;
             if (scissors && info.OpponentInventory.Count > 0)
-                futureValue += threat * (.5 + .15 * Math.Min(3, info.OpponentInventory.Count));
+                value += ContinuationForSelection(info, UnknownFaces(info), effects, Has(effects, ItemKind.SpareKey), out _)
+                    * threat * (.5 + .15 * Math.Min(3, info.OpponentInventory.Count));
+            bool compareFuture = cuffs;
+            foreach (var item in info.OwnItems)
+                if (item.Kind == ItemKind.Handcuffs && !item.IsConsumed && !item.IsFoundationTest &&
+                    Contains(info.UsableItemIds, item.Id)) compareFuture = true;
+            FutureForecast future = duck || compareFuture ? Forecast(info, effects, cuffs, forecasts) : default;
+            // 수갑을 비교하는 A의 모든 계획은 이미 활성화된 효과의 정상 후속 경로를 같은 기준으로 쓴다.
+            // 현재 정산 효과가 만든 미래 손해를 수갑이 줄이는 차이만 이득으로 더하지 않는다.
+            if (compareFuture) value += future.Normal - Forecast(info, ActiveEffects(info), false, forecasts).Normal;
             // 가위가 마지막 보유품을 없애면 오리의 봉쇄 가치는 사라진다.
             if (duck)
             {
                 int futureCount = count;
-                // 다음 실제 행동이 새 묶음으로 넘어가면 공개 지급 규칙만 반영한다.
-                bool crossesBatch = info.RemainingFaces.Count <= 2 || (cuffs && info.RemainingFaces.Count <= 3);
-                if (crossesBatch && info.Strategy.ItemsPerBatch > 0)
+                if (info.Strategy.ItemsPerBatch > 0)
                     futureCount = (int)Math.Min(info.Strategy.MaxHeldItems, (long)count + info.Strategy.ItemsPerBatch);
-                double denied = count * threat + Math.Max(0, futureCount - count) * PriorOpponentThreat(info);
-                futureValue += denied * .75 * (cuffs ? .85 : 1);
+                double reach = cuffs ? future.CuffedOpponentReach : future.OpponentReach;
+                double refill = cuffs ? future.CuffedOpponentRefill : future.OpponentRefill;
+                double denied = reach * count * threat + refill * Math.Max(0, futureCount - count) * PriorOpponentThreat(info);
+                value += denied * .75 * (cuffs ? .85 : 1);
             }
-            if (cuffs) futureValue += TempoValue(info);
-            // 이번 D에서 끝나면 미래 견제/추가 행동은 얻지 못한다. 소모 비용은 지금 지불한다.
-            if (futureValue != 0)
-                value += ContinuationForSelection(info, UnknownFaces(info), effects, Has(effects, ItemKind.SpareKey), out _) * futureValue;
+            if (cuffs) value += future.Tempo;
             foreach (ItemKind kind in Enum.GetValues(typeof(ItemKind)))
                 if (Has(added, kind)) value -= PreservationCost(info, kind);
             return value;
@@ -284,6 +308,10 @@ namespace TimeTheft
         }
 
         private static double TempoValue(AiItemObservation info)
+            => Forecast(info, 0, true, null).Tempo;
+
+        // 가위/오리의 상대 보유품 위협 prior는 자기 비공개 지식을 상대에게 주지 않는 기존 공개 추정을 유지한다.
+        private static double OpponentTempoPrior(AiItemObservation info)
         {
             // 현재 D의 드라이버/우회선은 다음 추가 행동으로 이월되지 않는다.
             double own = BestActionValue(info, info.RemainingFaces, 0, false);
@@ -326,7 +354,7 @@ namespace TimeTheft
                 case ItemKind.Screwdriver:
                 case ItemKind.TimeBypass:
                     return Math.Max(0, BestActionValue(info, info.RemainingFaces, Bit(kind), true) - baseline);
-                case ItemKind.Handcuffs: return Math.Max(0, TempoValue(info));
+                case ItemKind.Handcuffs: return Math.Max(0, OpponentTempoPrior(info));
                 case ItemKind.RubberDuck: return average * .2 * Math.Min(3, info.OwnItems.Count);
                 case ItemKind.Scissors: return average * .18 * (info.OwnItems.Count > 0 ? 1 : 0);
                 default: return 0;

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace TimeTheft
@@ -19,13 +20,60 @@ namespace TimeTheft
         public int BypassPercent { get; }
         public int MaxHeldItems { get; }
         public int ItemsPerBatch { get; }
+        // 다음 묶음의 공개 생성 규칙에서 만든 주변 분포. 실제 추첨/배치/게임 RNG는 포함하지 않는다.
+        public IReadOnlyList<AiClockPrior> NextBatchClocks { get; }
         internal AiStrategySettings(GameRules rules)
         {
             Enabled = rules.EnableAiItemStrategy; RiskTolerance = rules.AiRiskTolerance;
             DecisionNoise = rules.AiDecisionNoise; ItemConservation = rules.AiItemConservation;
             DriverReductionPercent = rules.ScrewdriverReductionPercent; BypassPercent = rules.TimeBypassPercent;
             MaxHeldItems = rules.MaxHeldItems; ItemsPerBatch = rules.ItemsPerBatch;
+            NextBatchClocks = BuildClockPrior(rules);
         }
+
+        private static IReadOnlyList<AiClockPrior> BuildClockPrior(GameRules rules)
+        {
+            var prior = new List<AiClockPrior>();
+            int range = rules.MaximumHours - rules.MinimumHours + 1;
+            bool weighted = rules.NumberWeights != null && rules.NumberWeights.Length > 0;
+            double total = 0;
+            if (weighted) foreach (int weight in rules.NumberWeights) total += weight;
+            else total = range;
+            double red = (1 + 2 * (double)rules.ExtraRedProbability) / 5;
+            // 기본 1~12와 작은 커스텀 분포는 정확히 열거한다. 큰 범위는 16구간의 질량·평균을 보존한다.
+            int buckets = Math.Min(16, range);
+            for (int bucket = 0; bucket < buckets; bucket++)
+            {
+                int start = (int)((long)range * bucket / buckets);
+                int end = (int)((long)range * (bucket + 1) / buckets);
+                double mass = 0, moment = 0;
+                if (weighted)
+                    for (int i = start; i < end; i++)
+                    { mass += rules.NumberWeights[i]; moment += (rules.MinimumHours + (double)i) * rules.NumberWeights[i]; }
+                else { mass = end - start; moment = mass * (rules.MinimumHours + (start + (double)end - 1) / 2); }
+                if (mass == 0) continue;
+                double mean = Math.Max(rules.MinimumHours + start,
+                    Math.Min(rules.MinimumHours + end - 1d, moment / mass));
+                int low = (int)Math.Floor(mean);
+                double fraction = mean - low;
+                AddPrior(prior, low, mass / total * (1 - fraction), red);
+                if (fraction > 0) AddPrior(prior, low + 1, mass / total * fraction, red);
+            }
+            return prior.AsReadOnly();
+        }
+
+        private static void AddPrior(List<AiClockPrior> prior, int hours, double probability, double red)
+        {
+            prior.Add(new AiClockPrior(new ClockFace(hours, ClockKind.Normal), probability * (1 - red)));
+            prior.Add(new AiClockPrior(new ClockFace(hours, ClockKind.Red), probability * red));
+        }
+    }
+
+    public readonly struct AiClockPrior
+    {
+        public ClockFace Face { get; }
+        public double Probability { get; }
+        internal AiClockPrior(ClockFace face, double probability) { Face = face; Probability = probability; }
     }
 
     public readonly partial struct AiItemObservation

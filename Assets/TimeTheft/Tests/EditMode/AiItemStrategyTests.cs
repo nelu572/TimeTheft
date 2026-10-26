@@ -16,6 +16,13 @@ namespace TimeTheft.Tests
             public override double NextDouble() => .99;
         }
 
+        // 계획 쌍에는 양의 잡음, 이어 평가하는 단일 계획에는 음의 잡음을 준다.
+        private sealed class PairFirstNoise : Random
+        {
+            private int calls;
+            public override double NextDouble() => calls++ % 2 == 0 ? 1 : 0;
+        }
+
         private static GameRules Rules(Participant actor = Participant.Ai, int life = 30, int hours = 8, bool redExtras = false) =>
             new GameRules { InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = actor, InitialLifeHours = life,
                 MinimumHours = hours, MaximumHours = hours, ExtraRedProbability = redExtras ? 1 : 0,
@@ -37,6 +44,133 @@ namespace TimeTheft.Tests
         }
         private static void LeaveOnlyNormal(TimeTheftMatch match) { Act(match, 2); Act(match, 0); }
         private static void LeaveOnlyRed(TimeTheftMatch match) { Act(match, 0); Act(match, 1); }
+
+        [TestCase(5, false, false)]
+        [TestCase(4, false, false)]
+        [TestCase(3, false, false)]
+        [TestCase(2, false, true)]
+        [TestCase(5, true, false)]
+        [TestCase(4, true, false)]
+        [TestCase(3, true, true)]
+        [TestCase(2, true, true)]
+        public void EmptyOpponentDuckDecisionMatchesRefillBeforeTheNextActualA(int remaining, bool cuffs, bool refills)
+        {
+            // 상대 0개와 합법 오리 상태를 유지한 채 실제 정산 명령으로 경계 직전까지 진행한다.
+            int used = 5 - remaining;
+            var rules = Rules(used % 2 == 0 ? Participant.Ai : Participant.Player, hours: 1);
+            rules.ItemsPerBatch = 1;
+            var match = Create(rules);
+            int duck = Give(match, Participant.Ai, ItemKind.RubberDuck);
+            int handcuffs = cuffs ? Give(match, Participant.Ai, ItemKind.Handcuffs) : 0;
+            StartBatch(match);
+            for (int i = 0; i < used; i++) Act(match, i);
+            if (cuffs) Assert.That(match.UseItem(Participant.Ai, handcuffs).Succeeded, Is.True);
+            var info = match.ObserveItems(Participant.Ai);
+            Assert.That(info.RemainingFaces.Count, Is.EqualTo(remaining));
+            Assert.That(info.OpponentInventory.Count, Is.Zero);
+            Assert.That(info.UsableItemIds, Does.Contain(duck), "상대 0개여도 사용 규칙상 합법");
+            Assert.That(TimeTheftAi.ChooseItem(info), refills ? Is.EqualTo(duck) : Is.Null,
+                "봉쇄할 다음 실제 A 전에 지급되는 경우만 빈 상대에게 사용한다");
+
+            // AI 예측과 독립적으로, 실제 규칙은 오리 사용을 허용한다. 실제 발동 A의 보유량을 대조한다.
+            Assert.That(match.UseItem(Participant.Ai, duck).Succeeded, Is.True);
+            int batch = match.Batch;
+            Act(match, used);
+            if (match.Stage == TurnStage.BatchComplete) StartBatch(match);
+            if (match.ActiveParticipant == Participant.Ai)
+            {
+                Assert.That(cuffs, Is.True);
+                Assert.That(match.IsItemUseBlocked(Participant.Player), Is.False);
+                Assert.That(match.GetPendingItemEffects(Participant.Ai).Any(e => e.Source.Kind == ItemKind.RubberDuck), Is.True);
+                Act(match, match.ObserveItems(Participant.Ai).AvailableClockIndices[0]);
+                if (match.Stage == TurnStage.BatchComplete) StartBatch(match);
+            }
+            Assert.That(match.ActiveParticipant, Is.EqualTo(Participant.Player));
+            Assert.That(match.IsItemUseBlocked(Participant.Player), Is.True);
+            Assert.That(match.Batch > batch, Is.EqualTo(refills));
+            Assert.That(match.GetInventory(Participant.Player).Count, Is.EqualTo(refills ? 1 : 0));
+        }
+
+        [TestCase(0, 3)]
+        [TestCase(3, 0)]
+        public void EmptyOpponentWithoutPossibleRefillPreservesDuckAtTheBatchBoundary(int perBatch, int capacity)
+        {
+            var rules = Rules(Participant.Player, hours: 1);
+            rules.ItemsPerBatch = perBatch;
+            rules.MaxHeldItems = capacity;
+            var match = Create(rules);
+            int duck = Give(match, Participant.Ai, ItemKind.RubberDuck);
+            StartBatch(match);
+            for (int i = 0; i < 3; i++) Act(match, i);
+            Assert.That(match.ObserveItems(Participant.Ai).RemainingFaces.Count, Is.EqualTo(2));
+            Assert.That(TimeTheftAi.ChooseItem(match.ObserveItems(Participant.Ai)), Is.Null);
+            Act(match, 3); StartBatch(match);
+            Assert.That(match.GetInventory(Participant.Player), Is.Empty);
+        }
+
+        [TestCase(false, .08f, .35f)]
+        [TestCase(true, .08f, .35f)]
+        [TestCase(false, 1f, 0f)]
+        [TestCase(true, 1f, 0f)]
+        public void ValuableHandcuffsPlanMustNotSpendAZeroBenefitDuckEvenWithNoise(bool refillEnabled, float noise, float conservation)
+        {
+            var rules = Rules(hours: 1);
+            rules.ItemsPerBatch = refillEnabled ? 3 : 0;
+            rules.AiDecisionNoise = noise;
+            rules.AiItemConservation = conservation;
+            var match = Create(rules);
+            int duck = Give(match, Participant.Ai, ItemKind.RubberDuck);
+            int cuffs = Give(match, Participant.Ai, ItemKind.Handcuffs);
+            StartBatch(match);
+            Assert.That(match.GetInventory(Participant.Player), Is.Empty);
+            Assert.That(TimeTheftAi.ChooseItem(match.ObserveItems(Participant.Ai), new PairFirstNoise()), Is.EqualTo(cuffs),
+                "수갑의 이득이나 계획별 잡음이 기여도 0인 오리까지 사용하게 해서는 안 된다");
+            Assert.That(UseChosenItems(match, Participant.Ai), Is.EqualTo(new[] { ItemKind.Handcuffs }));
+            Assert.That(match.GetInventory(Participant.Ai).Single().Id, Is.EqualTo(duck));
+        }
+
+        [Test]
+        public void ScissorsRemovingTheLastTargetReevaluatesDuckBeforeAnotherPlan()
+        {
+            var rules = Rules(hours: 1);
+            rules.AiDecisionNoise = 1;
+            var match = Create(rules);
+            int scissors = Give(match, Participant.Ai, ItemKind.Scissors);
+            int duck = Give(match, Participant.Ai, ItemKind.RubberDuck);
+            int cuffs = Give(match, Participant.Ai, ItemKind.Handcuffs);
+            int target = Give(match, Participant.Player, ItemKind.Handcuffs);
+            StartBatch(match);
+            var result = match.UseItem(Participant.Ai, scissors);
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(result.RemovedItem.Value.Id, Is.EqualTo(target));
+            Assert.That(match.GetInventory(Participant.Player), Is.Empty);
+            Assert.That(TimeTheftAi.ChooseItem(match.ObserveItems(Participant.Ai), new PairFirstNoise()), Is.EqualTo(cuffs));
+            Assert.That(UseChosenItems(match, Participant.Ai), Is.EqualTo(new[] { ItemKind.Handcuffs }));
+            Assert.That(match.GetInventory(Participant.Ai).Single().Id, Is.EqualTo(duck));
+        }
+
+        [Test]
+        public void DuckAndHandcuffsPlanCanBlockItemsGrantedAcrossTheBoundary()
+        {
+            var rules = Rules(hours: 1);
+            rules.ItemsPerBatch = 1;
+            var match = Create(rules);
+            Give(match, Participant.Ai, ItemKind.RubberDuck);
+            Give(match, Participant.Ai, ItemKind.Handcuffs);
+            StartBatch(match);
+            Act(match, 0); Act(match, 1);
+            Assert.That(match.ObserveItems(Participant.Ai).RemainingFaces.Count, Is.EqualTo(3));
+            Assert.That(match.GetInventory(Participant.Player), Is.Empty);
+            Assert.That(UseChosenItems(match, Participant.Ai),
+                Is.EquivalentTo(new[] { ItemKind.RubberDuck, ItemKind.Handcuffs }));
+            Act(match, 2);
+            Assert.That(match.ActiveParticipant, Is.EqualTo(Participant.Ai));
+            Assert.That(match.UsedCount, Is.EqualTo(3), "수갑 생략은 시계를 쓰지 않는다");
+            Assert.That(match.IsItemUseBlocked(Participant.Player), Is.False);
+            Act(match, 3); StartBatch(match);
+            Assert.That(match.GetInventory(Participant.Player).Count, Is.EqualTo(1));
+            Assert.That(match.IsItemUseBlocked(Participant.Player), Is.True);
+        }
 
         private static List<ItemKind> UseChosenItems(TimeTheftMatch match, Participant actor, int seed = 4)
         {
