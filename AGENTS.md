@@ -21,10 +21,12 @@
 | `Assets/Scenes/CounterStructureStudy.unity` | 통합 계수기의 독립 제작·실험용. 고정 표시값을 사용한다. |
 | `Assets/TimeTheft/Scripts/TimeTheftMatch.cs` | 현행 규칙·시계 상태·턴·수명·Time Bank의 유일한 소유자. 순수 C#이다. |
 | `Assets/TimeTheft/Scripts/TimeTheftMatch.Inventory.cs` | 같은 Match의 묶음별 자동 지급·상한·지급 결과·공개 인벤토리 관찰. Editor 테스트 주입과 분리한다. |
-| `Assets/TimeTheft/Scripts/TimeTheftAiObservation.cs`, `TimeTheftAi.Strategy.cs` | 공개 다중집합·자기 열쇠 지식·합법 ID의 불변 관찰과 제한된 AI 계획 평가. Match·숨은 위치 배열·게임 RNG/시드는 전달하지 않는다. |
+| `Assets/TimeTheft/Scripts/TimeTheftAiObservation.cs`, `TimeTheftAi.Strategy.cs`, `TimeTheftAi.Future.cs` | 공개 다중집합·자기 열쇠 지식·합법 ID의 불변 관찰과 제한된 AI 계획·미래 행동 평가. Match·숨은 위치 배열·게임 RNG/시드는 전달하지 않는다. |
 | `Assets/TimeTheft/Scripts/TimeTheftSettlement.cs` | 실제 D와 AI 가상 평가가 공유하는 무상태 정수 분 계산. 실제 상태 반영과 승패 소유자는 Match다. |
 | `Assets/TimeTheft/Scripts/TimeTheftGameController.cs` | 입력·AI 호출·공개/정산 코루틴·재시작을 연결한다. |
 | `Assets/TimeTheft/Scripts/TimeTheftGameView.cs` | 씬에 배치한 시계·계수기·행동 UI·결과 전표를 표시한다. |
+| `Assets/TimeTheft/Scripts/TimeTheftGameView.Items.cs` | 아이템 Hover 설명·ID 선택·사용/시계 선택/열쇠 유지 버튼과 월드 표시를 연결한다. |
+| `Assets/TimeTheft/Scripts/ItemWorldView.cs`, `ItemWorldInventoryView.cs`, `Assets/TimeTheft/Prefabs/ItemWorld.prefab` | 교체 가능한 임시 블록·한글 이름·Collider 입력과 양측 보유품 표시. 자기 ID와 상대 공개 관찰만 사용한다. |
 | `Assets/TimeTheft/Scripts/ClockTokenView.cs`, `Assets/TimeTheft/Prefabs/ClockToken.prefab` | 제작 중 모델과 독립된 임시 시계 표시부. 메인 씬에서 5개를 재사용한다. |
 | `Assets/TimeTheft/TimeTheftSettings.asset` | 현행 규칙의 잠정 수치·숫자 분포·선공·AI 성향·연출 시간·재현용 시드. |
 | `Assets/TimeTheft/Scripts/TabletopCameraLook.cs`, `TabletopFocusCamera.cs`, `TabletopFocusTarget.cs` | 기존 자유 시차·호버·Focus·열람 입력. 카메라 및 시차 설정을 임의로 변경하지 않는다. |
@@ -46,7 +48,7 @@
 - 실행 중 수명·Bank·이동량은 분 단위 `int`이며 공개 API 이름에 `Minutes`를 붙인다. 설정의 `InitialLifeHours`와 시계 `Hours`는 시간 단위로 보존한다. 통합 계수기는 누적 `HH:MM`과 고유 색상을 유지하며 24시간마다 순환하지 않는다. 실제 정산과 표시 보간 모두 총량을 보존하고, 모델 계산에는 부동소수점 반올림을 쓰지 않는다.
 - 기존 테이블·통합 계수기 외형, 카메라·시차·FocusPoint, Blender 원본·메시·UV·텍스처 및 제작 중인 회중시계 Prefab·개폐 애니메이션은 보호한다. 최종 시계 크기·5개 배치는 모델 완성 뒤 검토한다.
 - 시계는 모델에서 관리하는 숫자·종류·가시성·사용 상태를 표현하는 View다. 최종 모델을 연결할 때 규칙 모델을 3D Prefab에 종속시키지 않는다.
-- `ItemSlots`는 비활성 배치 샘플이며 아이템 보유량/슬롯 수 규칙이 아니다. 임시 인벤토리는 기존 Action UI에 실행 중 생성하는 텍스트로 표시한다. AI 추가 튜닝·최종 아이템 모델·메모·상대 캐릭터·최종 개폐/셔플/폐기·사운드·VFX는 별도 후속 작업이다.
+- `ItemSlots`는 비활성 배치 샘플이며 아이템 보유량/슬롯 수 규칙이 아니다. 실제 보유품은 별도 `WorldItems`의 앞/뒤 앵커 아래 표시하며 수량에 따라 중심 정렬한다. A에서 아이템 Hover → 클릭 선택 → 사용 버튼, 시계 선택 버튼으로 B 진행, 열쇠 확인 뒤 이 시계 유지 버튼/다른 시계 클릭을 사용한다. Tab·I·Enter는 보조 입력이다. 좌하단 전체 보유 목록은 제거하고 최근 지급·소모·제거 문구만 유지한다. AI 추가 튜닝·최종 아이템 모델·메모·상대 캐릭터·최종 개폐/셔플/폐기·사운드·VFX는 별도 후속 작업이다.
 - 공통 조작은 H 도움말, 우클릭/Esc Focus 복귀, Space 현재 연출 단축, R 재시작이다. 도움말은 일시 정지가 아니다.
 
 ## 개발 원칙
