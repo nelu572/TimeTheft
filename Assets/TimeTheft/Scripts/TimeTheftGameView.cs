@@ -5,7 +5,7 @@ using UnityEngine.Serialization;
 
 namespace TimeTheft
 {
-    public sealed class TimeTheftGameView : MonoBehaviour
+    public sealed partial class TimeTheftGameView : MonoBehaviour
     {
         [SerializeField] private ClockTokenView[] clocks;
         [SerializeField] private TabletopFocusCamera focusCamera;
@@ -71,6 +71,8 @@ namespace TimeTheft
         public void ResetTable(TimeTheftMatch match)
         {
             CancelPresentation();
+            if (worldItems) worldItems.SetVisible(true);
+            SetItemContext(match, false, true);
             resultDisplay.SetActive(false);
             helpCard.SetActive(false);
             restart.SetInputEnabled(false);
@@ -80,6 +82,7 @@ namespace TimeTheft
 
         public void ShowBatch(TimeTheftMatch match)
         {
+            SetItemContext(match, false, true);
             ClearDeltas();
             ApplyClocks(match);
             batchLabel.text = "B " + match.Batch.ToString("00");
@@ -95,6 +98,7 @@ namespace TimeTheft
 
         public void BeginShuffle(TimeTheftMatch match)
         {
+            SetItemContext(match, true, true);
             Controls(false);
             Inspectable(false);
             focusCamera.ReturnToOverview();
@@ -106,7 +110,7 @@ namespace TimeTheft
 
         public void OpenTurn(TimeTheftMatch match)
         {
-            RefreshInventory(match);
+            SetItemContext(match, false, true);
             SelectedTestItemId = null;
             SelectedItemId = null;
             ClearDeltas();
@@ -119,46 +123,39 @@ namespace TimeTheft
             Inspectable(true);
             for (int i = 0; i < clocks.Length; i++)
                 clocks[i].SetSelectable(match.CanSelectClock(Participant.Player, i));
+            RefreshInventory(match);
         }
 
         public void ShowItemPhase(TimeTheftMatch match, int selectedIndex)
         {
-            RefreshInventory(match);
+            SetItemContext(match, false, true);
             ClearDeltas();
             ApplyClocks(match);
             Controls(false);
             Inspectable(true);
-            SelectedTestItemId = null;
-            SelectedItemId = null;
             if (match.ActiveParticipant != Participant.Player)
             {
                 phaseLabel.text = "상대 차례 · 아이템 단계";
+                RefreshInventory(match);
                 return;
             }
             var inventory = match.GetInventory(Participant.Player);
-            if (inventory.Count == 0) return;
-            var item = inventory[selectedIndex % inventory.Count];
-            var failure = match.CheckItemUse(Participant.Player, item.Id);
-            bool usable = failure == ItemUseFailure.None;
-            bool testUse = item.IsFoundationTest && usable;
-            if (testUse) SelectedTestItemId = item.Id;
-            if (usable) SelectedItemId = item.Id;
-            phaseLabel.text = "내 차례 · 아이템 단계 (" + inventory.Count + "개)\n"
-                + (testUse ? "[공통 기반 테스트] #" + item.Id + " · 실제 효과 없음\nTab 다음 / I 검증 사용 / Enter 시계 선택"
-                    : usable ? ItemName(item.Kind) + " #" + item.Id + " · " + ItemDescription(item.Kind) + "\nTab 다음 / I 사용 / Enter 시계 선택"
-                    : failure == ItemUseFailure.AlreadyActive ? ItemName(item.Kind) + " #" + item.Id + " · 이번 차례 이미 사용 (사용 불가)\nTab 다음 / Enter 시계 선택"
-                    : ItemName(item.Kind) + " #" + item.Id + (failure == ItemUseFailure.NoTarget ? " · 제거할 상대 보유품 없음 (소모 안 됨)" : " · 현재 사용 불가") + "\nTab 다음 / Enter 시계 선택");
+            phaseLabel.text = "내 차례 · 아이템 단계 (" + inventory.Count + "개)\n아이템을 클릭해 선택하거나 시계 선택으로 진행하세요";
             ShowItemReadiness(match);
+            RefreshInventory(match);
         }
 
         public void ShowItemUse(ItemUseResult result)
         {
+            itemPresentation = true;
+            if (worldItems) worldItems.ShowUse(result);
             inventoryNotice = ActorName(result.Actor) + " · " + ItemName(result.Effect.Value.Source.Kind) + " 소모";
             if (result.RemovedItem.HasValue)
                 inventoryNotice += " / " + ActorName(result.RemovedItem.Value.Owner) + " " + ItemName(result.RemovedItem.Value.Kind) + " 제거";
             LastItemUse = result;
             SelectedTestItemId = null;
             SelectedItemId = null;
+            RefreshItemControls();
             Controls(false);
             Inspectable(false);
             foreach (var clock in clocks) clock.SetSelectable(false);
@@ -172,25 +169,29 @@ namespace TimeTheft
         {
             inventoryNotice = "사용 실패 · 소모 없음";
             phaseLabel.text += "\n사용 거부 · " + (result.Failure == ItemUseFailure.NoTarget ? "제거 대상 없음 · 소모 안 됨" : "현재 사용 불가 · 소모 안 됨");
+            RefreshItemControls();
         }
 
         public void OpenKeyDecision(TimeTheftMatch match)
         {
+            SetItemContext(match, false, true);
             Controls(false);
             Inspectable(true);
             ApplyClocks(match);
             phaseLabel.text = match.ActiveParticipant == Participant.Player
-                ? "여벌 열쇠 · 나만 확인\nEnter 유지 / 다른 미사용 시계 클릭으로 1회 재선택"
+                ? "여벌 열쇠 · 나만 확인\n이 시계 유지 / 다른 미사용 시계 클릭으로 1회 재선택"
                 : "상대 · 여벌 열쇠 확인 중";
             ShowPlayerClockKnowledge(match);
             for (int i = 0; i < clocks.Length; i++)
                 clocks[i].SetSelectable(match.ActiveParticipant == Participant.Player && i != match.CurrentClock
                     && match.GetClock(i).Visibility == ClockVisibility.Hidden);
             clocks[match.CurrentClock].SetSelected(true);
+            RefreshInventory(match);
         }
 
         public void OpenAction(TimeTheftMatch match)
         {
+            SetItemContext(match, false, true);
             Controls(match.ActiveParticipant == Participant.Player);
             Inspectable(true);
             phaseLabel.text = ActorName(match.ActiveParticipant) + " · 시계 선택\n"
@@ -199,10 +200,12 @@ namespace TimeTheft
             ShowPlayerClockKnowledge(match);
             ApplyClocks(match);
             clocks[match.CurrentClock].SetSelected(true);
+            RefreshInventory(match);
         }
 
         public void Reveal(TimeTheftMatch match)
         {
+            SetItemContext(match, true, true);
             Controls(false);
             Inspectable(false);
             focusCamera.ReturnToOverview();
@@ -278,36 +281,12 @@ namespace TimeTheft
                         : "\n" + ItemName(itemEvent.Source.Kind) + " · 대기 종료 (게임 종료)";
         }
 
-        private static string ItemName(ItemKind kind)
-        {
-            switch (kind)
-            {
-                case ItemKind.SpareKey: return "여벌 열쇠";
-                case ItemKind.Scissors: return "가위";
-                case ItemKind.RubberDuck: return "고무 오리";
-                case ItemKind.Handcuffs: return "수갑";
-                case ItemKind.TimeBypass: return "우회선";
-                default: return "드라이버";
-            }
-        }
-
-        private static string ItemDescription(ItemKind kind)
-        {
-            switch (kind)
-            {
-                case ItemKind.SpareKey: return "시계 종류·숫자 비공개 확인";
-                case ItemKind.Scissors: return "상대 미사용품 무작위 1개 제거";
-                case ItemKind.RubberDuck: return "상대 다음 실제 차례 아이템 봉쇄";
-                case ItemKind.Handcuffs: return "상대 다음 차례 생략";
-                case ItemKind.TimeBypass: return "징수 시간 분할";
-                default: return "빨간 징수 손실 경감";
-            }
-        }
+        private static string ItemName(ItemKind kind) => ItemWorldView.DisplayName(kind);
 
         private static string ItemUseMessage(ItemUseResult result)
         {
             if (result.RemovedItem.HasValue)
-                return ActorName(result.RemovedItem.Value.Owner) + " " + ItemName(result.RemovedItem.Value.Kind) + " #" + result.RemovedItem.Value.Id + " 제거 완료 · 효과 종료";
+                return ActorName(result.RemovedItem.Value.Owner) + " " + ItemName(result.RemovedItem.Value.Kind) + " 제거 완료 · 효과 종료";
             switch (result.Effect.Value.Source.Kind)
             {
                 case ItemKind.SpareKey: return "시계 선택에서 비공개 확인 대기";
@@ -340,6 +319,7 @@ namespace TimeTheft
 
         public void DiscardLast(TimeTheftMatch match)
         {
+            SetItemContext(match, true, true);
             ClearDeltas();
             ApplyClocks(match);
             Controls(false);
@@ -348,7 +328,9 @@ namespace TimeTheft
 
         public void Result(TimeTheftMatch match)
         {
+            SetItemContext(match, true, true);
             RefreshInventory(match);
+            if (worldItems) worldItems.SetVisible(false);
             Numbers(match);
             resultDisplay.SetActive(true);
             restart.SetInputEnabled(true);
@@ -384,6 +366,7 @@ namespace TimeTheft
 
         private void Controls(bool acting)
         {
+            HideItemButtons();
             SetButton(collectButton, acting);
             SetButton(rationButton, acting);
         }
@@ -435,32 +418,16 @@ namespace TimeTheft
             var rect = inventoryLabel.rectTransform;
             rect.anchorMin = rect.anchorMax = rect.pivot = Vector2.zero;
             rect.anchoredPosition = new Vector2(20, 20);
-            rect.sizeDelta = new Vector2(620, 180);
+            rect.sizeDelta = new Vector2(440, 80);
         }
 
         public void RefreshInventory(TimeTheftMatch match)
         {
-            if (!inventoryLabel) return;
-            inventoryLabel.text = InventoryText(match.ObserveInventory(Participant.Player, Participant.Player)) + "\n"
-                + InventoryText(match.ObserveInventory(Participant.Player, Participant.Ai)) + "\n" + inventoryNotice;
-        }
-
-        private static string InventoryText(ItemInventoryObservation inventory)
-        {
-            string text = ActorName(inventory.Owner) + " 보유 (" + inventory.Count + ") · ";
-            if (inventory.Count == 0) return text + "없음";
-            if (!inventory.RevealsKinds) return text + "종류 비공개";
-            bool first = true;
-            foreach (ItemKind kind in Enum.GetValues(typeof(ItemKind)))
-            {
-                int count = 0;
-                foreach (var heldKind in inventory.Kinds) if (heldKind == kind) count++;
-                if (count == 0) continue;
-                if (!first) text += " / ";
-                text += ItemName(kind) + "×" + count;
-                first = false;
-            }
-            return text;
+            itemMatch = match;
+            if (inventoryLabel) inventoryLabel.text = inventoryNotice;
+            ValidateItemSelection();
+            RefreshWorldItems();
+            RefreshItemControls();
         }
         private static string ActionName(TimeAction action) => action == TimeAction.Collect ? "징수" : "배급";
         private void RestoreNumberScale()
@@ -477,6 +444,7 @@ namespace TimeTheft
             inventoryNotice = "";
             if (inventoryLabel) inventoryLabel.text = "";
             SelectedItemId = null;
+            CancelItemControls();
             Controls(false);
             Inspectable(false);
             IsCountingTime = false;
@@ -493,6 +461,7 @@ namespace TimeTheft
             if (rationButton) rationButton.onClick.RemoveListener(Ration);
             if (restart) restart.Clicked -= Restart;
             if (inventoryLabel) Destroy(inventoryLabel.gameObject);
+            DestroyItemControls();
         }
     }
 }

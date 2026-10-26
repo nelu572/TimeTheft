@@ -13,7 +13,6 @@ namespace TimeTheft
         private TimeTheftGameView view;
         private System.Random aiRandom;
         private bool skipRequested;
-        private int selectedItemIndex;
         public bool IsPresentingItem { get; private set; }
         public TimeTheftMatch Match { get; private set; }
         public TimeTheftSettings Settings => settings;
@@ -24,6 +23,7 @@ namespace TimeTheft
             if (!settings) throw new InvalidOperationException("TimeTheftSettings를 연결하세요.");
             view = GetComponent<TimeTheftGameView>();
             view.Initialize(SelectClock, ChooseAction, RestartGame);
+            view.InitializeItemControls(SelectItem, UseSelectedItem, EndItemPhase, KeepPeekedClock);
             RestartGame();
         }
 
@@ -40,7 +40,7 @@ namespace TimeTheft
                 return;
             }
             if (Match == null || Match.Stage != TurnStage.AwaitingItems || Match.ActiveParticipant != Participant.Player || IsPresentingItem) return;
-            if (keyboard.tabKey.wasPressedThisFrame) view.ShowItemPhase(Match, ++selectedItemIndex);
+            if (keyboard.tabKey.wasPressedThisFrame) view.CycleItem(Match);
             if (keyboard.iKey.wasPressedThisFrame && view.SelectedItemId.HasValue) UseItem(view.SelectedItemId.Value);
             if (keyboard.enterKey.wasPressedThisFrame) EndItemPhase();
         }
@@ -51,10 +51,10 @@ namespace TimeTheft
             StopAllCoroutines();
             skipRequested = false;
             IsPresentingItem = false;
-            selectedItemIndex = 0;
             int seed = settings.RandomSeed == 0 ? Environment.TickCount : settings.RandomSeed;
             Match = new TimeTheftMatch(settings.Rules, new System.Random(seed), new System.Random(seed ^ 0x2471));
             aiRandom = new System.Random(seed ^ 0x51a7);
+            view.ConfigureItemRules(settings.Rules);
             view.ResetTable(Match);
             StartCoroutine(DealBatch());
         }
@@ -110,17 +110,29 @@ namespace TimeTheft
             StartCoroutine(PresentPlayerItem(result));
         }
 
+        public void SelectItem(int itemId)
+        {
+            if (!isActiveAndEnabled || IsPresentingItem || Match == null || !view ||
+                Match.Stage != TurnStage.AwaitingItems || Match.ActiveParticipant != Participant.Player) return;
+            view.SelectItem(Match, itemId);
+        }
+
+        public void UseSelectedItem()
+        {
+            if (view && view.SelectedItemId.HasValue) UseItem(view.SelectedItemId.Value);
+        }
+
         private IEnumerator PresentPlayerItem(ItemUseResult result)
         {
             yield return PresentItem(result);
-            if (Match.Stage == TurnStage.AwaitingItems) view.ShowItemPhase(Match, selectedItemIndex);
+            if (Match.Stage == TurnStage.AwaitingItems) view.ShowItemPhase(Match, 0);
             else yield return OpenTurn();
         }
 
         private IEnumerator PresentItem(ItemUseResult result)
         {
             IsPresentingItem = true;
-            view.ShowItemUse(result);
+            view.ShowItemUse(PublicItemResult(result));
             view.RefreshInventory(Match);
             yield return Animate(.15f, null);
             IsPresentingItem = false;
@@ -134,10 +146,9 @@ namespace TimeTheft
 
         private IEnumerator OpenTurn()
         {
-            selectedItemIndex = 0;
             if (Match.Stage == TurnStage.AwaitingItems)
             {
-                view.ShowItemPhase(Match, selectedItemIndex);
+                view.ShowItemPhase(Match, 0);
                 if (Match.ActiveParticipant == Participant.Player) yield break;
                 // 매 성공 뒤 새 관찰로 재평가한다. 시작 보유량과 시도 ID로 반복을 유한하게 제한한다.
                 int itemBudget = Match.GetInventory(Participant.Ai).Count;
@@ -201,6 +212,27 @@ namespace TimeTheft
         {
             foreach (int candidate in values) if (candidate == value) return true;
             return false;
+        }
+
+        // 상대 보유품은 종류와 수량으로만 표시한다. 공개 사용 결과에도 상대 ID를 넘기지 않는다.
+        private static ItemUseResult PublicItemResult(ItemUseResult result)
+        {
+            ItemEffectState? effect = result.Effect;
+            if (effect.HasValue && effect.Value.Source.Owner == Participant.Ai)
+            {
+                var value = effect.Value;
+                var source = value.Source;
+                effect = new ItemEffectState(new ItemState(0, source.Kind, source.Owner, source.IsConsumed,
+                    source.IsFoundationTest), value.Timing, value.RegisteredTurn, value.Target);
+            }
+            ItemState? removed = result.RemovedItem;
+            if (removed.HasValue && removed.Value.Owner == Participant.Ai)
+            {
+                var source = removed.Value;
+                removed = new ItemState(0, source.Kind, source.Owner, source.IsConsumed, source.IsFoundationTest);
+            }
+            return new ItemUseResult(result.Actor, result.Actor == Participant.Ai ? 0 : result.ItemId,
+                result.Failure, effect, removed);
         }
 
         public void SkipAnimation()
