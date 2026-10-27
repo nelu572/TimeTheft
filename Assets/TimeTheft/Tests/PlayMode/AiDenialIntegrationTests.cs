@@ -33,6 +33,7 @@ namespace TimeTheft.Tests
             yield return EditorSceneManager.LoadSceneInPlayMode("Assets/Scenes/TimeTheftGame.unity", new LoadSceneParameters(LoadSceneMode.Single));
             yield return null;
             controller = UnityEngine.Object.FindFirstObjectByType<TimeTheftGameController>();
+            GameUiTestInput.ShortenBatchReveal(controller);
             settings = UnityEngine.Object.Instantiate(controller.Settings);
             settings.Rules.InitialLifeHours = 30;
             settings.Rules.ScrewdriverReductionPercent = settings.Rules.TimeBypassPercent = 50;
@@ -82,6 +83,7 @@ namespace TimeTheft.Tests
                 Assert.That(match.GetInventory(Participant.Ai).Single().Id, Is.EqualTo(duck), "아직 다음 실제 A 전 지급이 없으므로 오리를 보존한다");
                 AssertWorldInventory();
                 controller.SelectClock(match.GetAvailableClockIndices()[0]);
+                yield return GameUiTestInput.ClockMotionReady(controller);
                 controller.ChooseAction(TimeAction.Ration);
             }
             yield return WaitFor(() => match.Batch == 2 && match.Stage == TurnStage.BatchPreview);
@@ -159,6 +161,7 @@ namespace TimeTheft.Tests
             Assert.That(match.GetInventory(Participant.Ai).Count, Is.EqualTo(2));
             TimeTheftItemTestSetup.SetUseAllowed(match, Participant.Ai, true);
             controller.SelectClock(match.GetAvailableClockIndices()[0]);
+            yield return GameUiTestInput.ClockMotionReady(controller);
             controller.ChooseAction(TimeAction.Ration);
             yield return WaitFor(() => match.Turn == 3 && match.Stage == TurnStage.AwaitingClock);
             Assert.That(match.ObserveItems(Participant.Ai).RemainingFaces.Count, Is.EqualTo(3));

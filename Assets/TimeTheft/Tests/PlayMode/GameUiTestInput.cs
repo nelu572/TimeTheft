@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -14,6 +14,29 @@ namespace TimeTheft.Tests
 {
     internal static class GameUiTestInput
     {
+        public static void ShortenBatchReveal(TimeTheftGameController controller)
+        {
+            var reveal = controller.View.BatchReveal;
+            if (!reveal) return;
+            // 규칙/입력 회귀는 실행 중인 씬 사본의 연출만 단축한다. 전용 연출 검사는 실제 시간을 검사한다.
+            reveal.PreparationDuration = 0;
+            reveal.RevealDuration = .12f; reveal.CameraApproachDuration = .08f;
+            reveal.CloseDuration = .08f; reveal.CameraReturnDuration = .1f;
+            var turn = controller.View.TurnPresentation;
+            if (turn) { turn.SelectDuration = .03f; turn.RevealEnterDuration = .04f; turn.LegacyReturnDuration = .03f; }
+            if (turn) { turn.SettlementTransitionDuration = .04f; turn.SettlementLeadDuration = .03f;
+                turn.TurnCloseDuration = .04f; turn.TurnCameraReturnDuration = .04f; }
+            if (controller.View.ShufflePresentation) controller.View.ShufflePresentation.SecondsPerPass = .01f;
+            var lifecycle = controller.View.Lifecycle;
+            if (lifecycle) { lifecycle.MoveDuration = lifecycle.HatchCycleDuration = lifecycle.SupplyDuration = .04f;
+                lifecycle.BinHoldDuration = lifecycle.DiscardBinHoldDuration = .01f; }
+        }
+        public static IEnumerator ClockMotionReady(TimeTheftGameController controller)
+        {
+            float deadline = Time.realtimeSinceStartup + 3;
+            while (controller.IsPresentingClock && Time.realtimeSinceStartup < deadline) yield return null;
+            Assert.That(controller.IsPresentingClock, Is.False, "Select 완료 후 기존 결정 입력을 사용한다");
+        }
         public static Vector2 Position(Button button)
         {
             Canvas.ForceUpdateCanvases();

@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using System;
 using System.Collections;
 using System.Linq;
@@ -40,6 +40,7 @@ namespace TimeTheft.Tests
             yield return EditorSceneManager.LoadSceneInPlayMode("Assets/Scenes/TimeTheftGame.unity", new LoadSceneParameters(LoadSceneMode.Single));
             yield return null;
             controller = UnityEngine.Object.FindFirstObjectByType<TimeTheftGameController>();
+            GameUiTestInput.ShortenBatchReveal(controller);
             Assert.That(controller, Is.Not.Null);
             settings = UnityEngine.Object.Instantiate(controller.Settings);
             // 기존 규칙/입력 회귀는 지급과 분리한다. 지급 통합 검사는 명시적으로 다시 켠다.
@@ -202,6 +203,15 @@ namespace TimeTheft.Tests
             Assert.That(remaining, Has.Length.EqualTo(2));
             Assert.That(remaining.All(i => controller.View.Clocks[i].SelectionTarget.InputEnabled), Is.True);
             int chosen = remaining.Last(), discarded = remaining.First();
+            var discardedToken = controller.View.Clocks[discarded]; bool discardedRemoved = false;
+            Action<int, bool> removed = (i, isDiscard) =>
+            {
+                if (i != discarded || !isDiscard) return;
+                Assert.That(discardedToken.gameObject.activeSelf, Is.False);
+                Assert.That(discardedToken.H2Presentation.DisplayedHours, Is.Null);
+                discardedRemoved = true;
+            };
+            controller.View.Lifecycle.RemoveCompleted += removed;
             yield return ClickClock(chosen);
             Assert.That(controller.Match.GetClock(chosen).Face.HasValue, Is.False);
             yield return ChooseAction(TimeAction.Ration);
@@ -209,10 +219,14 @@ namespace TimeTheft.Tests
             Assert.That(controller.Match.UsedCount, Is.EqualTo(4));
             Assert.That(controller.Match.GetClock(discarded).Visibility, Is.EqualTo(ClockVisibility.Discarded));
             Assert.That(controller.Match.GetClock(discarded).Face.HasValue, Is.False);
-            Assert.That(controller.View.Clocks[discarded].gameObject.activeSelf, Is.False);
+            Assert.That(discardedToken.H2Presentation.IsOpen || discardedToken.H2Presentation.IsRed, Is.False);
+            Assert.That(discardedToken.SelectionTarget.InputEnabled || discardedToken.GetComponent<Collider>().enabled, Is.False);
             Assert.That(controller.View.Clocks[discarded].Number.text, Is.Empty);
-            yield return WaitFor(() => controller.Match.Batch == 2 && controller.Match.Stage == TurnStage.BatchPreview);
-            Assert.That(controller.View.Clocks.All(c => c.IsOpen), Is.True);
+            yield return WaitFor(() => discardedRemoved);
+            controller.View.Lifecycle.RemoveCompleted -= removed;
+            yield return WaitFor(() => controller.Match.Batch == 2 && controller.View.BatchReveal.Phase == H2BatchRevealPresentation.RevealPhase.Observing);
+            Assert.That(controller.View.Clocks.All(c => c.H2Presentation.IsOpen), Is.True);
+            for (int i = 0; i < 5; i++) Assert.That(controller.View.Clocks[i].H2Presentation.DisplayedHours, Is.EqualTo(controller.Match.GetClock(i).Face.Value.Hours));
             yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingClock);
             Assert.That(controller.Match.ActiveParticipant, Is.EqualTo(Participant.Ai));
             Assert.That(controller.View.Clocks.All(c => !c.IsOpen), Is.True);
@@ -235,7 +249,11 @@ namespace TimeTheft.Tests
                     if (stage != TurnStage.AwaitingClock)
                     {
                         controller.SelectClock(4);
-                        if (stage != TurnStage.AwaitingAction) controller.ChooseAction(TimeAction.Collect);
+                        if (stage != TurnStage.AwaitingAction)
+                        {
+                            yield return GameUiTestInput.ClockMotionReady(controller);
+                            controller.ChooseAction(TimeAction.Collect);
+                        }
                         yield return WaitFor(() => controller.Match.Stage == stage);
                     }
                 }
@@ -366,11 +384,14 @@ namespace TimeTheft.Tests
             Assert.That(controller.View.Clocks.All(c => !c.SelectionTarget.InputEnabled && !c.IsOpen), Is.True);
             controller.SelectClock(0); controller.ChooseAction(TimeAction.Collect);
             Assert.That(match.CurrentClock, Is.EqualTo(-1));
-            yield return PressItemKey(keyboard.iKey);
-            Assert.That(controller.IsPresentingItem, Is.True);
-            controller.UseItem(second); controller.EndItemPhase();
-            Assert.That(match.GetInventory(Participant.Player).Select(i => i.Id), Is.EqualTo(new[] { second, unavailable }));
-            Assert.That(controller.View.LastItemUse.Value.ItemId, Is.EqualTo(first));
+            yield return PressItemKey(keyboard.iKey, () =>
+            {
+                // 입력 직후의 보호를 검사한다. 느린 Editor의 다음 프레임에는 짧은 피드백이 끝날 수 있다.
+                Assert.That(controller.IsPresentingItem, Is.True);
+                controller.UseItem(second); controller.EndItemPhase();
+                Assert.That(match.GetInventory(Participant.Player).Select(i => i.Id), Is.EqualTo(new[] { second, unavailable }));
+                Assert.That(controller.View.LastItemUse.Value.ItemId, Is.EqualTo(first));
+            });
             yield return WaitFor(() => !controller.IsPresentingItem);
             yield return PressItemKey(keyboard.iKey);
             yield return WaitFor(() => !controller.IsPresentingItem);
@@ -1003,6 +1024,7 @@ namespace TimeTheft.Tests
             int playerItem = TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Scissors);
             // 전용 fixture가 AI의 A 사용만 준비한다. 제품 ChooseItem 전략은 그대로 null이다.
             controller.StopAllCoroutines();
+            controller.View.CancelPresentation(); // 최초 공개를 건너뛰는 fixture도 카메라 소유권을 반납한다.
             Assert.That(match.CloseAndShuffle(), Is.True);
             Assert.That(match.CompleteShuffle(), Is.True);
             foreach (int id in ids) Assert.That(match.UseItem(Participant.Ai, id).Succeeded, Is.True);
@@ -1208,7 +1230,8 @@ namespace TimeTheft.Tests
             Assert.That(controller.View.LastItemUse.Value.Actor, Is.EqualTo(Participant.Ai));
             Assert.That(controller.View.WorldItems.OpponentItems, Is.Empty);
             Assert.That(controller.View.LastItemUse.Value.ItemId, Is.Zero, "AI 실 ID는 View에 전달하지 않는다");
-            yield return WaitFor(() => controller.View.IsCountingTime);
+            // 0.08초 표시 구간 대신 실제 정산 결과를 기다린다. 느린 Editor 프레임에서도 같은 효과를 검증한다.
+            yield return WaitFor(() => match.LastItemEffects.Count == 2 && match.LastTransfers.Count == 2);
             Assert.That(match.Action, Is.EqualTo(TimeAction.Collect));
             Assert.That(match.LastItemEffects.Count, Is.EqualTo(2));
             Assert.That(match.LastTransfers.Count, Is.EqualTo(2));
@@ -1403,7 +1426,7 @@ namespace TimeTheft.Tests
             throw new InvalidOperationException("종류별 시계가 보장되어야 합니다.");
         }
 
-        private IEnumerator PressItemKey(UnityEngine.InputSystem.Controls.KeyControl key)
+        private IEnumerator PressItemKey(UnityEngine.InputSystem.Controls.KeyControl key, Action afterSubmit = null)
         {
             // 마우스 UX는 사용 후 선택을 비운다. 보조 I 경로도 실제 Tab으로 다시 선택한다.
             if (key == keyboard.iKey && !controller.View.SelectedItemId.HasValue)
@@ -1413,6 +1436,7 @@ namespace TimeTheft.Tests
                 yield return null;
             }
             input.Press(key); InputSystem.Update(); controller.SendMessage("Update");
+            afterSubmit?.Invoke();
             input.Release(key); InputSystem.Update();
             yield return null;
         }
@@ -1461,6 +1485,7 @@ namespace TimeTheft.Tests
             Assert.That(controller.View.Clocks.Count(c => c.IsSelected), Is.EqualTo(1));
             Assert.That(token.IsSelected, Is.True);
             Assert.That(token.transform.Find("Visual").localPosition.z, Is.LessThan(0));
+            yield return GameUiTestInput.ClockMotionReady(controller);
             Assert.That(controller.View.CollectButton.interactable && controller.View.RationButton.interactable, Is.EqualTo(!keyDecision));
             afterPress?.Invoke();
             input.Release(mouse.leftButton);

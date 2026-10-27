@@ -34,6 +34,7 @@ namespace TimeTheft.Tests
             yield return EditorSceneManager.LoadSceneInPlayMode("Assets/Scenes/TimeTheftGame.unity", new LoadSceneParameters(LoadSceneMode.Single));
             yield return null;
             controller = UnityEngine.Object.FindFirstObjectByType<TimeTheftGameController>();
+            GameUiTestInput.ShortenBatchReveal(controller);
             settings = UnityEngine.Object.Instantiate(controller.Settings);
             settings.Rules.InitialItemCount = settings.Rules.ItemsPerBatch = 0;
             settings.Rules.EnableAiItemStrategy = false;
@@ -330,6 +331,7 @@ namespace TimeTheft.Tests
             yield return null;
             Assert.That(controller.Match.CurrentClock, Is.EqualTo(index));
             Assert.That(controller.Match.Stage, Is.EqualTo(expected));
+            yield return GameUiTestInput.ClockMotionReady(controller);
         }
 
         private void PointAt(Collider collider)
