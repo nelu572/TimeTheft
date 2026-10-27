@@ -1,0 +1,214 @@
+{
+  "grid_stats": {
+    "48": {
+      "cells": 9225,
+      "valid_texels": 117576,
+      "edge_fallbacks": 328,
+      "owners": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10,
+        11
+      ]
+    },
+    "96": {
+      "cells": 35145,
+      "valid_texels": 117576,
+      "edge_fallbacks": 43,
+      "owners": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10,
+        11
+      ]
+    }
+  },
+  "regions": {
+    "Lid_Outer": [
+      0.0078125,
+      0.0078125,
+      0.4921875,
+      0.4921875
+    ],
+    "Lid_Inner": [
+      0.5078125,
+      0.0078125,
+      0.7421875,
+      0.2421875
+    ],
+    "Case_Back": [
+      0.7578125,
+      0.0078125,
+      0.9921875,
+      0.2421875
+    ],
+    "Case_Front": [
+      0.5078125,
+      0.2578125,
+      0.7421875,
+      0.4921875
+    ],
+    "Crown": [
+      0.7578125,
+      0.2578125,
+      0.9921875,
+      0.4921875
+    ],
+    "Case_Profile": [
+      0.0078125,
+      0.5078125,
+      0.4921875,
+      0.578125
+    ],
+    "Lid_Profile": [
+      0.5078125,
+      0.5078125,
+      0.9921875,
+      0.578125
+    ],
+    "Bow": [
+      0.0078125,
+      0.59375,
+      0.2421875,
+      0.828125
+    ],
+    "Bow_Mounts": [
+      0.2578125,
+      0.59375,
+      0.3671875,
+      0.703125
+    ],
+    "Hinge_Mounts": [
+      0.3828125,
+      0.59375,
+      0.4921875,
+      0.703125
+    ],
+    "Hinge_Body": [
+      0.5078125,
+      0.59375,
+      0.6171875,
+      0.703125
+    ],
+    "Hinge_Pin": [
+      0.6328125,
+      0.59375,
+      0.7421875,
+      0.703125
+    ],
+    "Lid_Tongue": [
+      0.7578125,
+      0.59375,
+      0.8671875,
+      0.703125
+    ],
+    "Lid_Knuckle": [
+      0.8828125,
+      0.59375,
+      0.9921875,
+      0.703125
+    ],
+    "Hour_Hand": [
+      0.2578125,
+      0.71875,
+      0.3671875,
+      0.9921875
+    ],
+    "Minute_Hand": [
+      0.3828125,
+      0.71875,
+      0.4921875,
+      0.9921875
+    ],
+    "Hand_Hub": [
+      0.5078125,
+      0.71875,
+      0.6171875,
+      0.828125
+    ]
+  },
+  "owners": [
+    {
+      "index": 0,
+      "name": "PW_Bow.011",
+      "source_part": "Upper_Bow"
+    },
+    {
+      "index": 1,
+      "name": "PW_BowMounts.011",
+      "source_part": "Bow_Attachments"
+    },
+    {
+      "index": 2,
+      "name": "PW_Case.011",
+      "source_part": "Case_Body"
+    },
+    {
+      "index": 3,
+      "name": "PW_Crown.011",
+      "source_part": "Crown"
+    },
+    {
+      "index": 4,
+      "name": "PW_HandHub.011",
+      "source_part": null
+    },
+    {
+      "index": 5,
+      "name": "PW_HingeBody.011",
+      "source_part": "Body_Hinge_Knuckles"
+    },
+    {
+      "index": 6,
+      "name": "PW_HingeMounts.011",
+      "source_part": "Body_Hinge_Mounts"
+    },
+    {
+      "index": 7,
+      "name": "PW_HingePin.011",
+      "source_part": "Hinge_Pin"
+    },
+    {
+      "index": 8,
+      "name": "PW_HourHand.011",
+      "source_part": null
+    },
+    {
+      "index": 9,
+      "name": "PW_Lid.011",
+      "source_part": "Front_Lid"
+    },
+    {
+      "index": 10,
+      "name": "PW_LidKnuckle.011",
+      "source_part": "Lid_Hinge_Knuckle"
+    },
+    {
+      "index": 11,
+      "name": "PW_LidTongue.011",
+      "source_part": "Lid_Hinge_Tongue"
+    },
+    {
+      "index": 12,
+      "name": "PW_MinuteHand.011",
+      "source_part": null
+    }
+  ],
+  "C2_actual_use": "Only IDs and owner partition are used for visible native-PBR radiance pooling. Cell P/N/G are not evaluated by current C2 lighting.",
+  "N_warning": "RecipeN includes historical artistic cap-normal shaping; do not treat it as the actual current physicalPBR normal. For GPUapprox use actual mesh-derived G plus the original detail bump, and validate against PBR input.",
+  "grid_basis": "PerUVregion AND owner AND island; caps use48/96 cells each dimension, trims use aspect-scaled counts, not a global square UVrounding grid."
+}

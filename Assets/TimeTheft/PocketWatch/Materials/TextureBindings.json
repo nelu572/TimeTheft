@@ -1,0 +1,342 @@
+{
+  "assets": {
+    "DialNormal": {
+      "file": "Textures/H2_Dial_Albedo_256.png",
+      "sha256": "129b921c118e59b49a1b950f1a4bfaa18fc5bd6c65f6f721df4d406c9adcafc6",
+      "source": "C:\\Users\\user\\.codex\\visualizations\\2026\\10\\24\\01a16d09-5242-7190-9176-07a49baf3c91\\PocketWatch_H2_PixelArt\\Textures\\H2_Dial_Albedo_256.png",
+      "source_sha256": "129b921c118e59b49a1b950f1a4bfaa18fc5bd6c65f6f721df4d406c9adcafc6",
+      "derived": false,
+      "sRGB": true,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        256,
+        256
+      ],
+      "note": "Current classic H2 normal ivory dial; no game-number UI"
+    },
+    "DialRed": {
+      "file": "Textures/Red_C_Dial_256.png",
+      "sha256": "1bb2f622c2e763e0c9d31acd9457d1809d9542ece8d9d91fb9593c365c57ae21",
+      "source": "C:\\Users\\user\\.codex\\visualizations\\2026\\10\\24\\01a16d09-5242-7190-9176-07a49baf3c91\\PocketWatch_H2_C2_FirstReveal\\Textures\\Red_C_Dial_256.png",
+      "source_sha256": "1bb2f622c2e763e0c9d31acd9457d1809d9542ece8d9d91fb9593c365c57ae21",
+      "derived": false,
+      "sRGB": true,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        256,
+        256
+      ],
+      "note": "Latest improvedC red dial used by FirstReveal and FullCycle; earlierA/B/C excluded"
+    },
+    "RedInnerPigment": {
+      "file": "Textures/Red_C_LidInner_Pigment_512.png",
+      "sha256": "e0628698b4022b050d682c0706b52e070c5478d19779421102f87a062639f321",
+      "source": "C:\\Users\\user\\.codex\\visualizations\\2026\\10\\24\\01a16d09-5242-7190-9176-07a49baf3c91\\PocketWatch_H2_C2_FirstReveal\\Textures\\Red_C_LidInner_Pigment_512.png",
+      "source_sha256": "e0628698b4022b050d682c0706b52e070c5478d19779421102f87a062639f321",
+      "derived": false,
+      "sRGB": true,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "note": "Original inner-only pigment RGB; runtime C2 applies five-tier light gain"
+    },
+    "RedInnerMask": {
+      "file": "Textures/Red_C_LidInner_Mask_512.png",
+      "sha256": "608c2521be831e1516cc7bfa47456907333f542b6c1786828670545f5c512448",
+      "source": "C:\\Users\\user\\.codex\\visualizations\\2026\\10\\24\\01a16d09-5242-7190-9176-07a49baf3c91\\PocketWatch_H2_C2_FirstReveal\\Textures\\Red_C_LidInner_Mask_512.png",
+      "source_sha256": "608c2521be831e1516cc7bfa47456907333f542b6c1786828670545f5c512448",
+      "derived": false,
+      "sRGB": false,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "note": "Original UV mask; never recolor the entire closed lid"
+    },
+    "DetailIndex": {
+      "file": "Textures/H2_DetailIndex_512.png",
+      "sha256": "7862ff98194df3a5292524ccd474fb6446503c4a75c4ff76b94436ab21b79cfa",
+      "source": "C:\\Users\\user\\.codex\\visualizations\\2026\\10\\24\\01a16d09-5242-7190-9176-07a49baf3c91\\PocketWatch_H2_PaletteLighting\\H2_DetailIndex_512.png",
+      "source_sha256": "7862ff98194df3a5292524ccd474fb6446503c4a75c4ff76b94436ab21b79cfa",
+      "derived": false,
+      "sRGB": false,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "note": "Original512 surface index offset; retain full-resolution nearest sampling"
+    },
+    "FixedHighlightArtReference": {
+      "file": "Textures/H2_Metal_Albedo_512_ArtReference.png",
+      "sha256": "2f4245a4ca379891f13beb2a246f75c99aa20f3ae2023f10fea55d24a8e84fb3",
+      "source": "C:\\Users\\user\\.codex\\visualizations\\2026\\10\\24\\01a16d09-5242-7190-9176-07a49baf3c91\\PocketWatch_H2_PixelArt\\Textures\\H2_Metal_Albedo_512.png",
+      "source_sha256": "2f4245a4ca379891f13beb2a246f75c99aa20f3ae2023f10fea55d24a8e84fb3",
+      "derived": false,
+      "sRGB": true,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "note": "Historical approved painted pixel metal; art reference only, not current C2 PBR albedo input"
+    },
+    "TableT3": {
+      "file": "Textures/TimeTheft_Table_T3_Albedo.png",
+      "sha256": "22524a48f723bd872d96cf993d3dd2fbbb075cd5dc7e293fb3b08679d1e9ac7a",
+      "source": "C:\\unity\\TimeTheft\\Assets\\TimeTheft\\Table\\Textures\\TimeTheft_Table_T3_Albedo.png",
+      "source_sha256": "22524a48f723bd872d96cf993d3dd2fbbb075cd5dc7e293fb3b08679d1e9ac7a",
+      "derived": false,
+      "sRGB": true,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        1024,
+        1024
+      ],
+      "note": "Existing T3felt/trim atlas; shared with hatch export; no repaint"
+    },
+    "SurfaceFlags": {
+      "file": "Textures/H2_UV_SurfaceFlags_512.png",
+      "sha256": "400b5c4d9afa469b9e5277ba1cb1833c09b5f13093b0b68fbb718f60f71c9cbf",
+      "derived": true,
+      "parents": [
+        "C:\\Users\\user\\.codex\\visualizations\\2026\\10\\24\\01a16d09-5242-7190-9176-07a49baf3c91\\PocketWatch_H2_PaletteLighting\\H2_UV_SurfaceFlags_512.exr"
+      ],
+      "sRGB": false,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "pixel_order": "PNGtop-down; source arrays bottom-up UVv0",
+      "note": "Data only: R=lid-inner, G=valid metal UV, B=0, A=1. Not an AO or tangent-space normal map."
+    },
+    "PalettePreview": {
+      "file": "Textures/H2_C2_Palette39_sRGB8_Preview.png",
+      "sha256": "b7aa75fd7b8157de407e904e83c48953b53415a8f2e81a55b418a9a2a0297fc1",
+      "derived": true,
+      "parents": [
+        "ENV_Gold13_WeakT3Variants_LUT",
+        "C:\\Users\\user\\.codex\\visualizations\\2026\\10\\24\\01a16d09-5242-7190-9176-07a49baf3c91\\PocketWatch_H2_PixelPBR_Environment\\tint_calibration.json"
+      ],
+      "sRGB": true,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        13,
+        3
+      ],
+      "pixel_order": "PNGtop-down; source arrays bottom-up UVv0",
+      "note": "13columns×3rows; preview/8bit approximate LUT only. Exact linear constants are in Materials/C2_Palette39_Linear.json; no interpolation."
+    },
+    "CellIDs48": {
+      "file": "Textures/H2_UVCellIDs48_512.png",
+      "sha256": "fbfcd21f59a1e2a61e5f1b21dab287378bca322b91f2873e4a8bf0aa39891309",
+      "derived": true,
+      "parents": [
+        "Materials/ReferenceData/SP_SurfaceRecipe.npz",
+        "Materials/ReferenceData/SP_SurfaceRecipe.json",
+        "Materials/ReferenceData/SP_LiveGrid.py.txt"
+      ],
+      "sRGB": false,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "pixel_order": "PNGtop-down; source arrays bottom-up UVv0",
+      "note": "Exact data: cellID=Rbyte+256*Gbyte, ownerID=Bbyte-1, A255valid/A0invalid. 65535invalid. Point/Clamp/uncompressed/sRGBoff/no mipmaps. No new art."
+    },
+    "CellIDs96": {
+      "file": "Textures/H2_UVCellIDs96_512.png",
+      "sha256": "451dc7fd67767440cd1c86a0b7610d3733b64b250ef16a02526d0be4387a5dfb",
+      "derived": true,
+      "parents": [
+        "Materials/ReferenceData/SP_SurfaceRecipe.npz",
+        "Materials/ReferenceData/SP_SurfaceRecipe.json",
+        "Materials/ReferenceData/SP_LiveGrid.py.txt"
+      ],
+      "sRGB": false,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "pixel_order": "PNGtop-down; source arrays bottom-up UVv0",
+      "note": "Exact data: cellID=Rbyte+256*Gbyte, ownerID=Bbyte-1, A255valid/A0invalid. 65535invalid. Point/Clamp/uncompressed/sRGBoff/no mipmaps. No new art."
+    },
+    "MetalBaseColorPBRRef": {
+      "file": "Textures/H2_Metal_BaseColor_PBRRef_512.png",
+      "sha256": "38c3054d469b549ea879cecb1b9d85f0399c265820dddb8597b4998b4804fbdc",
+      "derived": true,
+      "parents": [
+        "Textures/H2_UV_SurfaceFlags_512.png",
+        "Textures/H2_DetailIndex_512.png"
+      ],
+      "sRGB": true,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "pixel_order": "PNGtop-down; source arrays bottom-up UVv0",
+      "note": "Derived only from original PB_Gold node base-color math. No broad fixed highlights. Input parity only; URPLitBRDF differs from Cycles/C2."
+    },
+    "MetalSmoothnessBody": {
+      "file": "Textures/H2_MetallicSmoothness_Body_PBRRef_512.png",
+      "sha256": "d6056e9e87ea2821da10aa0aacedf4defb1505e4a1aba0412cb22395e5f1532c",
+      "derived": true,
+      "parents": [
+        "Textures/H2_UV_SurfaceFlags_512.png",
+        "Textures/H2_DetailIndex_512.png"
+      ],
+      "sRGB": false,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "pixel_order": "PNGtop-down; source arrays bottom-up UVv0",
+      "note": "URPLitmetallic workflow data: R=metal1, A=1-original Blender perceptual roughness. GB0unused. Smoothness quantization<=0.5/255; not a C2 shader."
+    },
+    "MetalSmoothnessTrim": {
+      "file": "Textures/H2_MetallicSmoothness_Trim_PBRRef_512.png",
+      "sha256": "94366f35092deab83309b6c9b79cd7c35ae72768b7768e230debb34a95ac6572",
+      "derived": true,
+      "parents": [
+        "Textures/H2_UV_SurfaceFlags_512.png",
+        "Textures/H2_DetailIndex_512.png"
+      ],
+      "sRGB": false,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "pixel_order": "PNGtop-down; source arrays bottom-up UVv0",
+      "note": "URPLitmetallic workflow data: R=metal1, A=1-original Blender perceptual roughness. GB0unused. Smoothness quantization<=0.5/255; not a C2 shader."
+    },
+    "RedLidBaseColorPBRRef": {
+      "file": "Textures/H2_Metal_RedInner_BaseColor_PBRRef_512.png",
+      "sha256": "f1ee84650888e0b8252574b99fbd4dd9b721660de504ac4afae265b346a40b8b",
+      "derived": true,
+      "parents": [
+        "Textures/H2_Metal_BaseColor_PBRRef_512.png",
+        "Textures/Red_C_LidInner_Pigment_512.png",
+        "Textures/Red_C_LidInner_Mask_512.png"
+      ],
+      "sRGB": true,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "pixel_order": "PNGtop-down; source arrays bottom-up UVv0",
+      "note": "TemporaryURPLit red-lid variant only: exact original innerUVmask+pigment precompose; outside mask byte-identical. No C2 luminance-tier gain in URPLit."
+    },
+    "RedLidMetalSmoothnessPBRRef": {
+      "file": "Textures/H2_MetallicSmoothness_RedInner_PBRRef_512.png",
+      "sha256": "d48a89bdbfcd09b44948283555484aa45b9968e717bc22c967701587f2221f1c",
+      "derived": true,
+      "parents": [
+        "Textures/H2_MetallicSmoothness_Body_PBRRef_512.png",
+        "Textures/Red_C_LidInner_Mask_512.png"
+      ],
+      "sRGB": false,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "pixel_order": "PNGtop-down; source arrays bottom-up UVv0",
+      "note": "Outside mask same original metal; inside pigment mask Rmetal0/roughness.92 => smoothness.08. Does not reproduce C2 palette/gain or BlenderBump exactly."
+    },
+    "SurfaceFlagsFloatSource": {
+      "file": "Textures/H2_UV_SurfaceFlags_512_Source.exr",
+      "sha256": "7ecd6373185529b0e3e4f485f87862317b6922f7632ec3fd952b68ac850743c9",
+      "source": "C:\\Users\\user\\.codex\\visualizations\\2026\\10\\24\\01a16d09-5242-7190-9176-07a49baf3c91\\PocketWatch_H2_PaletteLighting\\H2_UV_SurfaceFlags_512.exr",
+      "source_sha256": "7ecd6373185529b0e3e4f485f87862317b6922f7632ec3fd952b68ac850743c9",
+      "derived": false,
+      "sRGB": false,
+      "filter": "Point",
+      "wrap": "Clamp",
+      "mipmaps": false,
+      "compression": "Uncompressed",
+      "NPOTScale": "None",
+      "size": [
+        512,
+        512
+      ],
+      "note": "Exact original floatEXR data source; binary SurfaceFlagsPNG is the runtime reference. Not an HDR albedo or AO map."
+    }
+  },
+  "dedup_originals_by_SHA256": true,
+  "Unity_import_applied": false,
+  "data_maps_are_not_art_redesign": true
+}

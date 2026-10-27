@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -13,6 +13,8 @@ namespace TimeTheft
         private TimeTheftGameView view;
         private System.Random aiRandom;
         private bool skipRequested;
+        private bool selectingClock;
+        public bool IsPresentingClock => selectingClock;
         public bool IsPresentingItem { get; private set; }
         public TimeTheftMatch Match { get; private set; }
         public TimeTheftSettings Settings => settings;
@@ -49,6 +51,7 @@ namespace TimeTheft
         {
             if (!isActiveAndEnabled || !view) return;
             StopAllCoroutines();
+            selectingClock = false;
             skipRequested = false;
             IsPresentingItem = false;
             int seed = settings.RandomSeed == 0 ? Environment.TickCount : settings.RandomSeed;
@@ -63,38 +66,75 @@ namespace TimeTheft
         {
             if (!Match.BeginBatch()) yield break;
             view.ShowBatch(Match);
-            yield return Animate(settings.PreviewDuration, null, false);
+            var lifecycle = view.Lifecycle;
+            if (lifecycle && lifecycle.CanPlay(view))
+            {
+                yield return lifecycle.Supply(view, Match.Batch > 1);
+                view.RestoreBatchFaces(Match);
+            }
+            var batchReveal = view.BatchReveal;
+            bool cinematic = batchReveal && batchReveal.CanPlay(view);
+            if (cinematic)
+            {
+                batchReveal.Prepare(view);
+                yield return batchReveal.Reveal();
+            }
+            // 읽기 가능 신호 뒤부터 실제 관찰 시간을 센다. 진입 프레임의 이전 delta를 포함하지 않는다.
+            double observeUntil = Time.realtimeSinceStartupAsDouble + Mathf.Max(.05f, settings.PreviewDuration);
+            while (Time.realtimeSinceStartupAsDouble < observeUntil) yield return null;
+            if (cinematic) yield return batchReveal.CloseAndReturn();
             Match.CloseAndShuffle();
             view.BeginShuffle(Match);
-            yield return Animate(Mathf.Min(.3f, settings.ShuffleDuration * .3f), view.CloseFrame);
-            yield return Animate(settings.ShuffleDuration, view.ShuffleFrame);
+            if (!cinematic) yield return Animate(Mathf.Min(.3f, settings.ShuffleDuration * .3f), view.CloseFrame);
+            var shuffle = view.ShufflePresentation;
+            if (shuffle && shuffle.CanPlay(view))
+            {
+                shuffle.Prepare(view, Match.LastShuffle);
+                yield return Animate(shuffle.Duration(settings.ShuffleDuration), shuffle.Frame, true, () => shuffle.IsRunning, false);
+                shuffle.Complete();
+            }
+            else yield return Animate(settings.ShuffleDuration, view.ShuffleFrame);
             Match.CompleteShuffle();
             yield return OpenTurn();
         }
 
         public void ChooseAction(TimeAction action)
         {
-            if (!isActiveAndEnabled || Match == null || !Match.CommitAction(Participant.Player, action)) return;
+            if (!isActiveAndEnabled || selectingClock || Match == null || !Match.CommitAction(Participant.Player, action)) return;
             StartCoroutine(Resolve());
         }
 
         public void SelectClock(int index)
         {
-            if (!isActiveAndEnabled || IsPresentingItem || Match == null) return;
+            if (!isActiveAndEnabled || IsPresentingItem || selectingClock || Match == null) return;
             if (Match.Stage == TurnStage.AwaitingKeyDecision)
             {
-                if (Match.ReselectPeekedClock(Participant.Player, index)) view.OpenAction(Match);
+                if (Match.ReselectPeekedClock(Participant.Player, index))
+                { view.OpenAction(Match); selectingClock = true; StartCoroutine(PresentClockSelection()); }
                 return;
             }
             if (!Match.SelectClock(Participant.Player, index)) return;
             if (Match.Stage == TurnStage.AwaitingKeyDecision) view.OpenKeyDecision(Match);
             else view.OpenAction(Match);
+            selectingClock = true; StartCoroutine(PresentClockSelection());
         }
 
         public void KeepPeekedClock()
         {
-            if (!isActiveAndEnabled || IsPresentingItem || Match == null || !Match.KeepPeekedClock(Participant.Player)) return;
+            if (!isActiveAndEnabled || IsPresentingItem || selectingClock || Match == null || !Match.KeepPeekedClock(Participant.Player)) return;
             view.OpenAction(Match);
+        }
+
+        private IEnumerator PresentClockSelection()
+        {
+            var motion = view.TurnPresentation;
+            if (!motion || !motion.CanPlay(view, Match.CurrentClock)) { selectingClock = false; yield break; }
+            selectingClock = true; view.LockClockMotionInput();
+            yield return motion.Select(view, Match.CurrentClock);
+            selectingClock = false;
+            if (!isActiveAndEnabled) yield break;
+            if (Match.Stage == TurnStage.AwaitingKeyDecision) view.OpenKeyDecision(Match);
+            else if (Match.Stage == TurnStage.AwaitingAction) view.OpenAction(Match);
         }
 
         public void UseItem(int itemId)
@@ -180,6 +220,7 @@ namespace TimeTheft
                 else if (!Match.ReselectPeekedClock(Participant.Ai, choice)) Match.KeepPeekedClock(Participant.Ai);
             }
             view.OpenAction(Match);
+            yield return PresentClockSelection();
             yield return Animate(settings.AiThinkDuration * .5f, null);
             // 합법적인 자기 지식과 공개 관찰만 사용한다. 게임 RNG/숨은 순서에는 접근하지 않는다.
             var actionInfo = Match.ObserveItems(Participant.Ai);
@@ -191,18 +232,51 @@ namespace TimeTheft
 
         private IEnumerator Resolve()
         {
-            view.Reveal(Match);
+            var motion = view.TurnPresentation;
+            bool cinematic = motion && motion.CanPlay(view, Match.CurrentClock);
+            bool settlementMotion = cinematic && motion.CanSettle(view, Match.CurrentClock);
+            view.Reveal(Match, cinematic);
+            if (cinematic)
+            {
+                yield return motion.RevealEnter(view, Match.CurrentClock);
+                view.ShowRevealDetails(Match);
+            }
             yield return Animate(settings.RevealDuration, null);
-            Match.Settle();
+            if (settlementMotion) yield return motion.SettlementTransition();
+            else if (cinematic) yield return motion.ReturnToLegacy();
+            if (!Match.Settle()) yield break;
             view.BeginTransfer(Match);
+            if (settlementMotion)
+            {
+                motion.SetSettlementPhase(H2TurnPresentation.TurnPhase.SettlementLead);
+                yield return Animate(motion.SettlementLeadDuration, null);
+                motion.SetSettlementPhase(H2TurnPresentation.TurnPhase.CountingTime);
+            }
             yield return Animate(settings.TransferDuration, view.NumbersFrame);
+            if (settlementMotion) motion.SetSettlementPhase(H2TurnPresentation.TurnPhase.SettlementHold);
             yield return Animate(settings.ResultHoldDuration, null);
+            var lifecycle = view.Lifecycle;
+            bool removal = settlementMotion && lifecycle && lifecycle.CanPlay(view);
+            if (settlementMotion) yield return motion.CloseAndReturn(removal);
+            if (removal)
+            {
+                if (lifecycle && lifecycle.CanPlay(view)) yield return lifecycle.Remove(view, Match.CurrentClock, false);
+                else yield return motion.ReturnToLegacy();
+            }
             if (Match.Stage == TurnStage.GameOver) { view.Result(Match); yield break; }
             Match.CompleteTurn();
+            if (motion) motion.Cancel();
             if (Match.Stage == TurnStage.BatchComplete)
             {
-                view.DiscardLast(Match);
-                yield return Animate(settings.DiscardDuration, null);
+                bool discardMotion = lifecycle && lifecycle.CanPlay(view);
+                view.DiscardLast(Match, discardMotion);
+                if (discardMotion)
+                {
+                    for (int i = 0; i < TimeTheftMatch.ClocksPerBatch; i++)
+                        if (Match.GetClock(i).Visibility == ClockVisibility.Discarded)
+                        { yield return lifecycle.Remove(view, i, true); break; }
+                }
+                else yield return Animate(settings.DiscardDuration, null);
                 yield return DealBatch();
             }
             else yield return OpenTurn();
@@ -238,6 +312,10 @@ namespace TimeTheft
         public void SkipAnimation()
         {
             if (!isActiveAndEnabled || Match == null) return;
+            var lifecycle = view.Lifecycle;
+            if (lifecycle && lifecycle.IsRunning) { lifecycle.SkipMotion(); return; }
+            var motion = view.TurnPresentation;
+            if (motion && motion.IsBusy) { motion.SkipMotion(); return; }
             if (IsPresentingItem) { skipRequested = true; return; }
             if (Match.Stage == TurnStage.AwaitingAction ||
                 Match.Stage == TurnStage.AwaitingClock || Match.Stage == TurnStage.AwaitingItems ||
@@ -246,16 +324,26 @@ namespace TimeTheft
             skipRequested = true;
         }
 
-        private IEnumerator Animate(float duration, Action<float> frame, bool allowSkip = true)
+        internal void RestoreClockPresentationAfterDisable(int index)
+        {
+            if (!isActiveAndEnabled || !view || Match == null || index < 0 || index != Match.CurrentClock) return;
+            if (!Match.GetClock(index).Face.HasValue) return;
+            view.RestoreRevealedClock(Match);
+            if (Match.Stage == TurnStage.Revealing) view.ShowRevealDetails(Match);
+        }
+
+        private IEnumerator Animate(float duration, Action<float> frame, bool allowSkip = true, Func<bool> continueWhile = null, bool ease = true)
         {
             skipRequested = false;
             float elapsed = 0;
             duration = Mathf.Max(.05f, duration);
             while (elapsed < duration)
             {
+                if (continueWhile != null && !continueWhile()) break;
                 if (allowSkip && skipRequested && elapsed >= .06f) break;
                 elapsed += Time.unscaledDeltaTime;
-                frame?.Invoke(Mathf.SmoothStep(0, 1, Mathf.Clamp01(elapsed / duration)));
+                float progress = Mathf.Clamp01(elapsed / duration);
+                frame?.Invoke(ease ? Mathf.SmoothStep(0, 1, progress) : progress);
                 yield return null;
             }
             skipRequested = false;
@@ -266,6 +354,7 @@ namespace TimeTheft
         private void OnDisable()
         {
             StopAllCoroutines();
+            selectingClock = false;
             IsPresentingItem = false;
             skipRequested = false;
             if (!view) return;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -37,6 +37,9 @@ namespace TimeTheft
         public TextMeshPro AiLife => aiLife;
         public TextMeshPro Bank => bank;
         public TabletopFocusCamera FocusCamera => focusCamera;
+        public H2BatchRevealPresentation BatchReveal => GetComponent<H2BatchRevealPresentation>();
+        public H2ClockLifecyclePresentation Lifecycle => GetComponent<H2ClockLifecyclePresentation>();
+        public H2TurnPresentation TurnPresentation => GetComponent<H2TurnPresentation>();
         public bool IsResultVisible => resultDisplay.activeSelf;
         public bool IsCountingTime { get; private set; }
         public int? SelectedTestItemId { get; private set; }
@@ -56,6 +59,7 @@ namespace TimeTheft
                 if (!clocks[i]) throw new InvalidOperationException("임시 시계 참조가 비었습니다.");
                 clocks[i].Initialize(i, selectClock);
             }
+            CaptureClockLayout();
             choose = action; restartGame = newGame;
             if (initialized) return;
             collectButton.onClick.AddListener(Collect);
@@ -71,6 +75,7 @@ namespace TimeTheft
         public void ResetTable(TimeTheftMatch match)
         {
             CancelPresentation();
+            ResetClockLayout();
             if (worldItems) worldItems.SetVisible(true);
             SetItemContext(match, false, true);
             resultDisplay.SetActive(false);
@@ -82,6 +87,7 @@ namespace TimeTheft
 
         public void ShowBatch(TimeTheftMatch match)
         {
+            ResetClockLayout();
             SetItemContext(match, false, true);
             ClearDeltas();
             ApplyClocks(match);
@@ -93,7 +99,7 @@ namespace TimeTheft
                     + (grant.SkippedCount > 0 ? " (보유 상한)" : "");
             RefreshInventory(match);
             Controls(false);
-            Inspectable(true);
+            Inspectable(!BatchReveal || !BatchReveal.isActiveAndEnabled);
         }
 
         public void BeginShuffle(TimeTheftMatch match)
@@ -203,17 +209,45 @@ namespace TimeTheft
             RefreshInventory(match);
         }
 
-        public void Reveal(TimeTheftMatch match)
+        public void LockLifecycleInput()
+        {
+            // 결과 관찰과 Close가 끝난 뒤 회수 동작 위에 이전 정산 문구를 남기지 않는다.
+            ClearDeltas();
+            Controls(false); Inspectable(false);
+            foreach (var clock in clocks) clock.SetSelectable(false);
+        }
+        internal void RestoreBatchFaces(TimeTheftMatch match) => ApplyClocks(match);
+
+        public void LockClockMotionInput()
+        {
+            Controls(false);
+            foreach (var clock in clocks) clock.SetSelectable(false);
+        }
+
+        public void Reveal(TimeTheftMatch match, bool enteringMotion = false)
         {
             SetItemContext(match, true, true);
             Controls(false);
             Inspectable(false);
-            focusCamera.ReturnToOverview();
+            if (!enteringMotion) focusCamera.ReturnToOverview();
             ApplyClocks(match);
             clocks[match.CurrentClock].SetSelected(true);
+            if (enteringMotion)
+                phaseLabel.text = ActorName(match.ActiveParticipant) + " · " + ActionName(match.Action) + "\n덮개를 여는 중";
+            else ShowRevealDetails(match);
+        }
+
+        public void ShowRevealDetails(TimeTheftMatch match)
+        {
             ClockFace face = match.GetClock(match.CurrentClock).Face.Value;
             phaseLabel.text = ActorName(match.ActiveParticipant) + " · " + ActionName(match.Action) + "\n"
                 + (face.Kind == ClockKind.Red ? "빨강" : "일반") + " 시계 " + face.Hours + "h";
+        }
+
+        public void RestoreRevealedClock(TimeTheftMatch match)
+        {
+            var clock = clocks[match.CurrentClock];
+            clock.Show(match.GetClock(match.CurrentClock)); clock.SetSelected(true);
         }
 
         public void BeginTransfer(TimeTheftMatch match)
@@ -317,11 +351,15 @@ namespace TimeTheft
             fromPlayer = toPlayer; fromAi = toAi; fromBank = toBank;
         }
 
-        public void DiscardLast(TimeTheftMatch match)
+        public void DiscardLast(TimeTheftMatch match, bool keepClosedVisual = false)
         {
             SetItemContext(match, true, true);
             ClearDeltas();
-            ApplyClocks(match);
+            for (int i = 0; i < clocks.Length; i++)
+            {
+                var state = match.GetClock(i);
+                clocks[i].Show(state, keepClosedVisual && state.Visibility == ClockVisibility.Discarded);
+            }
             Controls(false);
             phaseLabel.text = "4개 사용 완료\n마지막 시계는 열지 않고 폐기합니다";
         }
@@ -438,6 +476,10 @@ namespace TimeTheft
         }
         public void CancelPresentation()
         {
+            if (Lifecycle) Lifecycle.Cancel();
+            if (ShufflePresentation) ShufflePresentation.Cancel();
+            if (BatchReveal) BatchReveal.Cancel();
+            if (TurnPresentation) TurnPresentation.Cancel();
             if (!initialized) return;
             SelectedTestItemId = null;
             LastItemUse = null;

@@ -122,6 +122,7 @@ namespace TimeTheft
         public int TransferredMinutes { get; private set; }
         public Participant TransferParticipant { get; private set; }
         public GameWinner Winner { get; private set; }
+        public ClockShuffle LastShuffle { get; private set; }
         public IReadOnlyList<ItemEffectResult> LastItemEffects => lastItemEffects.ToArray();
         public IReadOnlyList<TimeTransfer> LastTransfers => lastTransfers.ToArray();
         public IReadOnlyList<ItemTurnEvent> TurnItemEvents => turnItemEvents.ToArray();
@@ -148,6 +149,7 @@ namespace TimeTheft
             if (Stage != TurnStage.BatchComplete) return false;
             UsedCount = DiscardedCount = 0;
             CurrentClock = -1;
+            LastShuffle = null;
             ClearSpareKeyKnowledge();
             Array.Clear(used, 0, used.Length);
             normalCount = redCount = normalHours = redHours = 0;
@@ -172,7 +174,7 @@ namespace TimeTheft
         {
             if (Stage != TurnStage.BatchPreview) return false;
             Stage = TurnStage.Shuffling;
-            Shuffle();
+            Shuffle(true);
             return true;
         }
 
@@ -448,13 +450,16 @@ namespace TimeTheft
         private int LifeMinutes(Participant participant) => participant == Participant.Player ? PlayerLifeMinutes : AiLifeMinutes;
         private static Participant Other(Participant participant) => participant == Participant.Player ? Participant.Ai : Participant.Player;
         private static TimeAccount Account(Participant participant) => participant == Participant.Player ? TimeAccount.Player : TimeAccount.Ai;
-        private void Shuffle()
+        private void Shuffle(bool recordMovement = false)
         {
+            int[] sources = recordMovement ? new[] { 0, 1, 2, 3, 4 } : null;
             for (int i = clocks.Length - 1; i > 0; i--)
             {
                 int j = random.Next(i + 1);
                 ClockFace old = clocks[i]; clocks[i] = clocks[j]; clocks[j] = old;
+                if (sources != null) { int source = sources[i]; sources[i] = sources[j]; sources[j] = source; }
             }
+            if (sources != null) LastShuffle = new ClockShuffle(sources);
         }
     }
 }

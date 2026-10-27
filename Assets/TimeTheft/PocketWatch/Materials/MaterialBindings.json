@@ -1,0 +1,401 @@
+{
+  "model": "Models/H2_Watch.fbx",
+  "model_hierarchy_prefix": "H2_Watch/MotionRoot/VisualScale",
+  "geometry": "One shared fourteen-mesh watch; Normal/Red are material variants, not duplicate meshes",
+  "MaterialRoles": {
+    "GoldBody": "sourceRoleBody",
+    "GoldTrim": "sourceRoleTrim",
+    "DialNormal": "sourceRoleDial/Normal",
+    "DialRed": "sourceRoleDial/Red",
+    "HandsDarkMetal": "sourceRoleHands",
+    "GoldBodyRedLidVariant": "sameGoldBodyoutside+innerUVpigment/mask"
+  },
+  "profiles": {
+    "H2_GoldBody_PBRRef": {
+      "shader": "Universal Render Pipeline/Lit",
+      "workflow": "Metallic",
+      "_BaseColor_linear": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "_Metallic": 1.0,
+      "_Smoothness": 1.0,
+      "_MetallicGlossMap_channel": "Rmetallic / Asmoothness",
+      "_SmoothnessTextureChannel": 0,
+      "_OcclusionMap": null,
+      "occlusion": 1.0,
+      "_BumpMap": null,
+      "Blender_bump_not_ported": "Strength.12/Distance.0007 remains a source reference; no equivalent normal map supplied",
+      "_EmissionColor": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "surface": "Opaque",
+      "alphaClip": false,
+      "cull": "Back",
+      "receiveShadows": true,
+      "keywords_on": [
+        "_METALLICSPECGLOSSMAP"
+      ],
+      "keywords_off": [
+        "_SPECULAR_SETUP",
+        "_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A",
+        "_NORMALMAP",
+        "_EMISSION",
+        "_RECEIVE_SHADOWS_OFF"
+      ],
+      "status": "PBR reference inputs only, not current C2 output; Unity import/runtime untested",
+      "MaterialRole": "GoldBody",
+      "_BaseMap": "Textures/H2_Metal_BaseColor_PBRRef_512.png",
+      "_MetallicGlossMap": "Textures/H2_MetallicSmoothness_Body_PBRRef_512.png",
+      "original_Blender_Metallic": 1.0,
+      "original_perceptual_roughness_outer": 0.28,
+      "original_perceptual_roughness_inner": 0.43,
+      "detail_roughness_offset": [
+        -0.025,
+        0.025
+      ]
+    },
+    "H2_GoldTrim_PBRRef": {
+      "shader": "Universal Render Pipeline/Lit",
+      "workflow": "Metallic",
+      "_BaseColor_linear": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "_Metallic": 1.0,
+      "_Smoothness": 1.0,
+      "_MetallicGlossMap_channel": "Rmetallic / Asmoothness",
+      "_SmoothnessTextureChannel": 0,
+      "_OcclusionMap": null,
+      "occlusion": 1.0,
+      "_BumpMap": null,
+      "Blender_bump_not_ported": "Strength.12/Distance.0007 remains a source reference; no equivalent normal map supplied",
+      "_EmissionColor": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "surface": "Opaque",
+      "alphaClip": false,
+      "cull": "Back",
+      "receiveShadows": true,
+      "keywords_on": [
+        "_METALLICSPECGLOSSMAP"
+      ],
+      "keywords_off": [
+        "_SPECULAR_SETUP",
+        "_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A",
+        "_NORMALMAP",
+        "_EMISSION",
+        "_RECEIVE_SHADOWS_OFF"
+      ],
+      "status": "PBR reference inputs only, not current C2 output; Unity import/runtime untested",
+      "MaterialRole": "GoldTrim",
+      "_BaseMap": "Textures/H2_Metal_BaseColor_PBRRef_512.png",
+      "_MetallicGlossMap": "Textures/H2_MetallicSmoothness_Trim_PBRRef_512.png",
+      "original_Blender_Metallic": 1.0,
+      "original_perceptual_roughness_outer": 0.32,
+      "original_perceptual_roughness_inner": 0.36,
+      "detail_roughness_offset": [
+        -0.025,
+        0.025
+      ]
+    },
+    "H2_Dial_Normal": {
+      "MaterialRole": "DialNormal",
+      "shader": "Universal Render Pipeline/Lit",
+      "_BaseMap": "Textures/H2_Dial_Albedo_256.png",
+      "_BaseColor_linear": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "_Metallic": 0.0,
+      "_Smoothness": 0.15,
+      "_MetallicGlossMap": null,
+      "_BumpMap": null,
+      "_OcclusionMap": null,
+      "_EmissionColor": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "surface": "Opaque",
+      "alphaClip": false,
+      "receiveShadows": true,
+      "original_Blender_Roughness": 0.85,
+      "original_Blender_Specular_IOR_Level": 0.15,
+      "IOR_mapping_notice": "URPLitmetallicworkflow dielectric F0 is not Blender IORLevel. This low-gloss temporary profile is not an exact optical match.",
+      "C2_palette_quantization": false,
+      "status": "Native matte PBR reference, no game value UI"
+    },
+    "H2_Dial_Red": {
+      "MaterialRole": "DialRed",
+      "shader": "Universal Render Pipeline/Lit",
+      "_BaseMap": "Textures/Red_C_Dial_256.png",
+      "_BaseColor_linear": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "_Metallic": 0.0,
+      "_Smoothness": 0.15,
+      "_MetallicGlossMap": null,
+      "_BumpMap": null,
+      "_OcclusionMap": null,
+      "_EmissionColor": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "surface": "Opaque",
+      "alphaClip": false,
+      "receiveShadows": true,
+      "original_Blender_Roughness": 0.85,
+      "original_Blender_Specular_IOR_Level": 0.15,
+      "IOR_mapping_notice": "URPLitmetallicworkflow dielectric F0 is not Blender IORLevel. This low-gloss temporary profile is not an exact optical match.",
+      "C2_palette_quantization": false,
+      "status": "Native matte PBR reference, no game value UI"
+    },
+    "H2_Hands_DarkMetal": {
+      "MaterialRole": "HandsDarkMetal",
+      "shader": "Universal Render Pipeline/Lit",
+      "_BaseMap": null,
+      "_BaseColor_sRGB_hex": "#20282D",
+      "_BaseColor_linear": [
+        0.014443843596092545,
+        0.021219010376003555,
+        0.026241221894849898,
+        1.0
+      ],
+      "_Metallic": 0.85,
+      "_Smoothness": 0.62,
+      "_MetallicGlossMap": null,
+      "_BumpMap": null,
+      "_OcclusionMap": null,
+      "_EmissionColor": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "source_Blender_Roughness": 0.38,
+      "C2_palette_quantization": false,
+      "separate_mesh_and_center_pivots_required": true,
+      "status": "Native dark-metal PBR reference"
+    },
+    "H2_GoldBody_RedInner_PBRRef": {
+      "shader": "Universal Render Pipeline/Lit",
+      "workflow": "Metallic",
+      "_BaseColor_linear": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "_Metallic": 1.0,
+      "_Smoothness": 1.0,
+      "_MetallicGlossMap_channel": "Rmetallic / Asmoothness",
+      "_SmoothnessTextureChannel": 0,
+      "_OcclusionMap": null,
+      "occlusion": 1.0,
+      "_BumpMap": null,
+      "Blender_bump_not_ported": "Strength.12/Distance.0007 remains a source reference; no equivalent normal map supplied",
+      "_EmissionColor": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "surface": "Opaque",
+      "alphaClip": false,
+      "cull": "Back",
+      "receiveShadows": true,
+      "keywords_on": [
+        "_METALLICSPECGLOSSMAP"
+      ],
+      "keywords_off": [
+        "_SPECULAR_SETUP",
+        "_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A",
+        "_NORMALMAP",
+        "_EMISSION",
+        "_RECEIVE_SHADOWS_OFF"
+      ],
+      "status": "TemporaryURPLit red-inner precompose only; dynamic C2 five-tier gain is unimplemented",
+      "MaterialRole": "GoldBodyRedLidVariant",
+      "_BaseMap": "Textures/H2_Metal_RedInner_BaseColor_PBRRef_512.png",
+      "_MetallicGlossMap": "Textures/H2_MetallicSmoothness_RedInner_PBRRef_512.png",
+      "original_Blender_Metallic": 1.0,
+      "original_perceptual_roughness_outer": 0.28,
+      "original_perceptual_roughness_inner": 0.43,
+      "detail_roughness_offset": [
+        -0.025,
+        0.025
+      ],
+      "only_bind_to": "HingeAssembly/LidPivot/Lid",
+      "inside_mask_native_pigment": {
+        "metallic": 0,
+        "perceptual_roughness": 0.92
+      },
+      "outside_mask_byte_identical_to_normal": true
+    }
+  },
+  "default_parts": [
+    {
+      "path": "Case",
+      "source_part": "Case_Body",
+      "sp_owner": 2,
+      "MaterialRole": "GoldBody",
+      "profile": "H2_GoldBody_PBRRef"
+    },
+    {
+      "path": "CrownAssembly/Bow",
+      "source_part": "Upper_Bow",
+      "sp_owner": 0,
+      "MaterialRole": "GoldTrim",
+      "profile": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "path": "CrownAssembly/BowMounts",
+      "source_part": "Bow_Attachments",
+      "sp_owner": 1,
+      "MaterialRole": "GoldTrim",
+      "profile": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "path": "CrownAssembly/Crown",
+      "source_part": "Crown",
+      "sp_owner": 3,
+      "MaterialRole": "GoldTrim",
+      "profile": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "path": "Dial",
+      "source_part": "Dial_Blank",
+      "sp_owner": null,
+      "MaterialRole": "DialNormal",
+      "profile": "H2_Dial_Normal"
+    },
+    {
+      "path": "DialMechanism/HandHub",
+      "source_part": "HandHub",
+      "sp_owner": 4,
+      "MaterialRole": "GoldTrim",
+      "profile": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "path": "DialMechanism/HourHand",
+      "source_part": "HourHand",
+      "sp_owner": 8,
+      "MaterialRole": "HandsDarkMetal",
+      "profile": "H2_Hands_DarkMetal"
+    },
+    {
+      "path": "DialMechanism/MinuteHand",
+      "source_part": "MinuteHand",
+      "sp_owner": 12,
+      "MaterialRole": "HandsDarkMetal",
+      "profile": "H2_Hands_DarkMetal"
+    },
+    {
+      "path": "HingeAssembly/HingeBody",
+      "source_part": "Body_Hinge_Knuckles",
+      "sp_owner": 5,
+      "MaterialRole": "GoldTrim",
+      "profile": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "path": "HingeAssembly/HingeMounts",
+      "source_part": "Body_Hinge_Mounts",
+      "sp_owner": 6,
+      "MaterialRole": "GoldTrim",
+      "profile": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "path": "HingeAssembly/HingePin",
+      "source_part": "Hinge_Pin",
+      "sp_owner": 7,
+      "MaterialRole": "GoldTrim",
+      "profile": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "path": "HingeAssembly/LidPivot/Lid",
+      "source_part": "Front_Lid",
+      "sp_owner": 9,
+      "MaterialRole": "GoldBody",
+      "profile": "H2_GoldBody_PBRRef"
+    },
+    {
+      "path": "HingeAssembly/LidPivot/LidKnuckle",
+      "source_part": "Lid_Hinge_Knuckle",
+      "sp_owner": 10,
+      "MaterialRole": "GoldTrim",
+      "profile": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "path": "HingeAssembly/LidPivot/LidTongue",
+      "source_part": "Lid_Hinge_Tongue",
+      "sp_owner": 11,
+      "MaterialRole": "GoldTrim",
+      "profile": "H2_GoldTrim_PBRRef"
+    }
+  ],
+  "variants": {
+    "Normal": {
+      "Dial": "H2_Dial_Normal",
+      "HingeAssembly/LidPivot/Lid": "H2_GoldBody_PBRRef"
+    },
+    "Red": {
+      "Dial": "H2_Dial_Red",
+      "HingeAssembly/LidPivot/Lid": "H2_GoldBody_RedInner_PBRRef"
+    }
+  },
+  "C2_custom_shader_contract": {
+    "implemented": false,
+    "spec": "Shaders_Spec/H2_C2_Lighting_Spec_KO.md",
+    "pseudo": "Shaders_Spec/H2_C2_GPU_Pseudocode.hlsl.txt",
+    "BodyTrim_only": true,
+    "owner_per_mesh": "sp_owner from default_parts; exclude8/12 and Dial",
+    "instance_namespace": "assign independently per actual watch/pool instance",
+    "red_inner_only": {
+      "owner": 9,
+      "mask": "Textures/Red_C_LidInner_Mask_512.png",
+      "pigment": "Textures/Red_C_LidInner_Pigment_512.png",
+      "luminance_tiers": [
+        0.3,
+        0.12,
+        0.035,
+        0.008
+      ],
+      "gains": [
+        1,
+        0.76,
+        0.48,
+        0.22,
+        0.055
+      ]
+    },
+    "current_CPU_C2_offline": "Physical Cycles input + visible UV48/96 statistics + 512 detail + fixed palette/environment correction; not a static BaseMap or URPLit"
+  },
+  "do_not_change": [
+    "H2mesh/UV",
+    "HourHand/MinuteHandcenter pivots",
+    "LidPivotlocalaxis",
+    "goldoutside appearance across variants"
+  ],
+  "Unity_materials_created": false,
+  "Unity_import_or_Runtime_tested": false,
+  "coordinate_or_UV_import_not_tested": "Confirm a non-symmetric UVcorner/checker in the actual target Unity importer."
+}

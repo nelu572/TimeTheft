@@ -98,6 +98,8 @@ namespace TimeTheft
             itemMatch = match;
             itemPresentation = presenting;
             if (clearSelection) SelectedItemId = SelectedTestItemId = null;
+            // 근접 공개/정산 중 임시 블록이 핵심 정보를 가리지 않도록 표시만 잠시 숨긴다.
+            if (worldItems) worldItems.SetVisible(!presenting && match.Stage != TurnStage.BatchPreview);
             RefreshWorldItems();
             RefreshItemControls();
         }

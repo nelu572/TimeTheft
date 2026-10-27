@@ -52,12 +52,31 @@ namespace TimeTheft
         private PointerEventData uiPointer;
         private readonly List<RaycastResult> uiHits = new List<RaycastResult>();
         private int suppressedPointerFrame = -1;
+        private bool presentationCameraOwned;
 
         public TabletopFocusTarget CurrentTarget { get; private set; }
         public TabletopFocusTarget HoveredTarget { get; private set; }
         public TabletopFocusTarget MagneticTarget => lockTarget;
-        public bool HasCameraControl => state != ViewState.Free;
+        public bool HasCameraControl => presentationCameraOwned || state != ViewState.Free;
         public bool IsTransitioning => state == ViewState.MovingToTarget || state == ViewState.Returning;
+        public bool IsPresentationCameraOwned => presentationCameraOwned;
+        public Vector3 OverviewPosition => transform.parent ? transform.parent.TransformPoint(homePosition) : homePosition;
+        public Quaternion OverviewRotation => transform.parent ? transform.parent.rotation * homeRotation : homeRotation;
+        public float OverviewFieldOfView => homeFieldOfView;
+
+        public void BeginPresentationCamera()
+        {
+            SetHover(null); ClearMagneticHover(); CurrentTarget = null; state = ViewState.Free;
+            look.SetSuspended(true); presentationCameraOwned = true;
+        }
+
+        public void EndPresentationCamera()
+        {
+            if (!presentationCameraOwned) return;
+            transform.localPosition = homePosition; transform.localRotation = homeRotation;
+            viewCamera.fieldOfView = homeFieldOfView; state = ViewState.Free; CurrentTarget = null;
+            presentationCameraOwned = false; look.SetSuspended(false); SuppressPointerForCurrentFrame();
+        }
 
         // UI가 제출과 동시에 숨겨져도 같은 프레임의 클릭이 뒤의 물체로 통과하지 않는다.
         public void SuppressPointerForCurrentFrame() => suppressedPointerFrame = Time.frameCount;
@@ -85,6 +104,7 @@ namespace TimeTheft
 
         private void Update()
         {
+            if (presentationCameraOwned) return;
             var mouse = Mouse.current;
             var keyboard = Keyboard.current;
             if (windowFocused && HasCameraControl &&
@@ -155,7 +175,7 @@ namespace TimeTheft
 
         public bool Focus(TabletopFocusTarget target)
         {
-            if (!isActiveAndEnabled || !target || !target.IsAvailable) return false;
+            if (presentationCameraOwned || !isActiveAndEnabled || !target || !target.IsAvailable) return false;
             SetHover(null);
             ClearMagneticHover();
             look.SetSuspended(true);
@@ -167,6 +187,7 @@ namespace TimeTheft
 
         public void ReturnToOverview()
         {
+            if (presentationCameraOwned) return;
             ClearMagneticHover();
             if (!HasCameraControl || state == ViewState.Returning) return;
             CurrentTarget = null;
@@ -186,6 +207,7 @@ namespace TimeTheft
 
         private void LateUpdate()
         {
+            if (presentationCameraOwned) return;
             if (!HasCameraControl) return;
             bool returning = state == ViewState.Returning;
             if (!returning && (!CurrentTarget || !CurrentTarget.IsAvailable)) return;
@@ -337,6 +359,7 @@ namespace TimeTheft
 
         private void OnDisable()
         {
+            EndPresentationCamera();
             SetHover(null);
             ClearMagneticHover();
             if (!HasCameraControl) return;

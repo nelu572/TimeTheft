@@ -1,0 +1,1203 @@
+{
+  "file": {
+    "file": "Models/H2_Watch.fbx",
+    "sha256": "25bac674fa47a72359aa6a4faa3ef3b69a48f5b4f798bf344f6b3c5e7663bc3b",
+    "bytes": 223916,
+    "bake_anim": false
+  },
+  "canonical_root": "H2_Watch",
+  "canonical_diameter": 0.96,
+  "review_visual_scale": 0.7,
+  "review_diameter": 0.672,
+  "unit_policy": "1 Blender unit=1 Unity unit; review world proportions preserved, not confirmed physical palm-size units.",
+  "axis_export": {
+    "forward": "-Z",
+    "up": "Y",
+    "FBX_SCALE_UNITS": true
+  },
+  "runtime_coordinate_mapping": "U=(Bx,Bz,By); rotations S*R_B*S, xyzw quaternion. Unity importer has NOT been run.",
+  "hierarchy": [
+    {
+      "path": "H2_Watch",
+      "type": "EMPTY",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": null,
+      "UV_layers": []
+    },
+    {
+      "path": "H2_Watch/MotionRoot",
+      "type": "EMPTY",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": null,
+      "UV_layers": []
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale",
+      "type": "EMPTY",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": null,
+      "UV_layers": []
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/Case",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "ae6e4fddc70454228ce42003ae9e19a198dbb1402b4e4fa0405855f6b8138f5b",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/CrownAssembly",
+      "type": "EMPTY",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        0.70710688829422,
+        0.0,
+        0.0,
+        -0.7071066498756409
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          3.1391647326017846e-07,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          -1.0,
+          3.1391647326017846e-07,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": null,
+      "UV_layers": []
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/CrownAssembly/Bow",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "e905a39b08d4d6d2626018881fa3f364eee092f67305afb7125fbd7e2fd158ef",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/CrownAssembly/BowMounts",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "13ecc4467f712654842692cee3c27dcf3d6ea5274dc9803e5710851c7e10bcaa",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/CrownAssembly/Crown",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "4f786d765999791bd2041f7ac0ac098ee9dc4f3e9d5b1354f825d19086c7ca45",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/Dial",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "c34dae0a3f093a64caa3e9ed21d1dc913dba7d4592260a24891552d8c84fd050",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/DialMechanism",
+      "type": "EMPTY",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": null,
+      "UV_layers": []
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/DialMechanism/HandHub",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "28ff6853bab554e48f4d9d9c909baf6537adc3e1ba969f2d754b6edcc7ffcb50",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/DialMechanism/HourHand",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.04128003120422363
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.04128003120422363
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "1534b7386dd8a601f8b80813fe622f3cfad951bfcda34024e59c76b205afeb35",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/DialMechanism/MinuteHand",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.04488015174865723
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.04488015174865723
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "2f8995ae89db34288030c72fdc184fe1d8563748e6c8ec8a5a1cbbd1809e53fa",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/HingeAssembly",
+      "type": "EMPTY",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": null,
+      "UV_layers": []
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/HingeAssembly/HingeBody",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "acea52ea4eb43924eb8cee68f7d0d1cc2e0d59851df18b749b424707ba926461",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/HingeAssembly/HingeMounts",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "b308c2f532d326c6d9faddf1746ec2f98809e86d652ab1a325b1a8328b274d6e",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/HingeAssembly/HingePin",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "784583217814b3a177b3985e56e585aaff0030743c06371d6203cfd7a35eee56",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/HingeAssembly/LidPivot",
+      "type": "EMPTY",
+      "loc_B": [
+        -0.5159997940063477,
+        0.0,
+        0.06336009502410889
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.5159997940063477
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.06336009502410889
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": null,
+      "UV_layers": []
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/HingeAssembly/LidPivot/Lid",
+      "type": "MESH",
+      "loc_B": [
+        0.5159997940063477,
+        0.0,
+        -0.06336009502410889
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.5159997940063477
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.06336009502410889
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "d3ebe75a0ad35eadd1e8a0e0938d61d73fddab853084fb040a2e99c85d16e17b",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/HingeAssembly/LidPivot/LidKnuckle",
+      "type": "MESH",
+      "loc_B": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "7b7dd266c6a1e49f696ba483b31dd92be2d53d4ef2c6aa83b630682215be57ae",
+      "UV_layers": [
+        "UVMap"
+      ]
+    },
+    {
+      "path": "H2_Watch/MotionRoot/VisualScale/HingeAssembly/LidPivot/LidTongue",
+      "type": "MESH",
+      "loc_B": [
+        0.5159997940063477,
+        0.0,
+        -0.06336009502410889
+      ],
+      "rot_B_wxyz": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_local_B": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.5159997940063477
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.06336009502410889
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "mesh_hash": "f0e30cea05f789eb1395b61e1e8593e3bcfc478878fb4e275ffe3202f615c8d2",
+      "UV_layers": [
+        "UVMap"
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "part": "Case",
+      "role": "Body",
+      "normal_material": "H2_GoldBody_PBRRef",
+      "red_material": "H2_GoldBody_PBRRef"
+    },
+    {
+      "part": "Bow",
+      "role": "Trim",
+      "normal_material": "H2_GoldTrim_PBRRef",
+      "red_material": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "part": "BowMounts",
+      "role": "Trim",
+      "normal_material": "H2_GoldTrim_PBRRef",
+      "red_material": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "part": "Crown",
+      "role": "Trim",
+      "normal_material": "H2_GoldTrim_PBRRef",
+      "red_material": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "part": "Dial",
+      "role": "Dial",
+      "normal_material": "H2_Dial_Normal",
+      "red_material": "H2_Dial_Red"
+    },
+    {
+      "part": "HandHub",
+      "role": "Trim",
+      "normal_material": "H2_GoldTrim_PBRRef",
+      "red_material": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "part": "HourHand",
+      "role": "Hands",
+      "normal_material": "H2_Hands_DarkMetal",
+      "red_material": "H2_Hands_DarkMetal"
+    },
+    {
+      "part": "MinuteHand",
+      "role": "Hands",
+      "normal_material": "H2_Hands_DarkMetal",
+      "red_material": "H2_Hands_DarkMetal"
+    },
+    {
+      "part": "HingeBody",
+      "role": "Trim",
+      "normal_material": "H2_GoldTrim_PBRRef",
+      "red_material": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "part": "HingeMounts",
+      "role": "Trim",
+      "normal_material": "H2_GoldTrim_PBRRef",
+      "red_material": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "part": "HingePin",
+      "role": "Trim",
+      "normal_material": "H2_GoldTrim_PBRRef",
+      "red_material": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "part": "Lid",
+      "role": "Body",
+      "normal_material": "H2_GoldBody_PBRRef",
+      "red_material": "H2_GoldBody_RedInner_PBRRef"
+    },
+    {
+      "part": "LidKnuckle",
+      "role": "Trim",
+      "normal_material": "H2_GoldTrim_PBRRef",
+      "red_material": "H2_GoldTrim_PBRRef"
+    },
+    {
+      "part": "LidTongue",
+      "role": "Trim",
+      "normal_material": "H2_GoldTrim_PBRRef",
+      "red_material": "H2_GoldTrim_PBRRef"
+    }
+  ],
+  "source_meshes": {
+    "Case": {
+      "source_name": "Clock0_PW_Case.002",
+      "hash": "ae6e4fddc70454228ce42003ae9e19a198dbb1402b4e4fa0405855f6b8138f5b"
+    },
+    "Bow": {
+      "source_name": "Clock0_PW_Bow.002",
+      "hash": "e905a39b08d4d6d2626018881fa3f364eee092f67305afb7125fbd7e2fd158ef"
+    },
+    "BowMounts": {
+      "source_name": "Clock0_PW_BowMounts.002",
+      "hash": "13ecc4467f712654842692cee3c27dcf3d6ea5274dc9803e5710851c7e10bcaa"
+    },
+    "Crown": {
+      "source_name": "Clock0_PW_Crown.002",
+      "hash": "4f786d765999791bd2041f7ac0ac098ee9dc4f3e9d5b1354f825d19086c7ca45"
+    },
+    "Dial": {
+      "source_name": "Clock0_PW_Dial.002",
+      "hash": "c34dae0a3f093a64caa3e9ed21d1dc913dba7d4592260a24891552d8c84fd050"
+    },
+    "HandHub": {
+      "source_name": "Clock0_PW_HandHub.002",
+      "hash": "28ff6853bab554e48f4d9d9c909baf6537adc3e1ba969f2d754b6edcc7ffcb50"
+    },
+    "HourHand": {
+      "source_name": "Clock0_PW_HourHand.002",
+      "hash": "1534b7386dd8a601f8b80813fe622f3cfad951bfcda34024e59c76b205afeb35"
+    },
+    "MinuteHand": {
+      "source_name": "Clock0_PW_MinuteHand.002",
+      "hash": "2f8995ae89db34288030c72fdc184fe1d8563748e6c8ec8a5a1cbbd1809e53fa"
+    },
+    "HingeBody": {
+      "source_name": "Clock0_PW_HingeBody.002",
+      "hash": "acea52ea4eb43924eb8cee68f7d0d1cc2e0d59851df18b749b424707ba926461"
+    },
+    "HingeMounts": {
+      "source_name": "Clock0_PW_HingeMounts.002",
+      "hash": "b308c2f532d326c6d9faddf1746ec2f98809e86d652ab1a325b1a8328b274d6e"
+    },
+    "HingePin": {
+      "source_name": "Clock0_PW_HingePin.002",
+      "hash": "784583217814b3a177b3985e56e585aaff0030743c06371d6203cfd7a35eee56"
+    },
+    "Lid": {
+      "source_name": "Clock0_PW_Lid.002",
+      "hash": "d3ebe75a0ad35eadd1e8a0e0938d61d73fddab853084fb040a2e99c85d16e17b"
+    },
+    "LidKnuckle": {
+      "source_name": "Clock0_PW_LidKnuckle.002",
+      "hash": "7b7dd266c6a1e49f696ba483b31dd92be2d53d4ef2c6aa83b630682215be57ae"
+    },
+    "LidTongue": {
+      "source_name": "Clock0_PW_LidTongue.002",
+      "hash": "f0e30cea05f789eb1395b61e1e8593e3bcfc478878fb4e275ffe3202f615c8d2"
+    }
+  },
+  "drivers_exported": false,
+  "constraints_exported": false
+}
