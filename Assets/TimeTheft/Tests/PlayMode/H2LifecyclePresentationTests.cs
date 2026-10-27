@@ -177,9 +177,15 @@ namespace TimeTheft.Tests
             controller.SelectClock(0); yield return GameUiTestInput.ClockMotionReady(controller); controller.ChooseAction(TimeAction.Ration);
             yield return Wait(() => life.Phase == H2ClockLifecyclePresentation.LifecyclePhase.MovingToHatch);
             var match = controller.Match; var balances = new[] { match.PlayerLifeMinutes, match.AiLifeMinutes, match.BankMinutes };
-            controller.SkipAnimation(); yield return Wait(() => match.Stage == TurnStage.AwaitingClock);
+            controller.SkipAnimation(); yield return Wait(() => !life.IsRunning && !controller.View.Clocks[0].gameObject.activeSelf && match.UsedCount == 1);
             Assert.That(match.UsedCount, Is.EqualTo(1)); Assert.That(new[] { match.PlayerLifeMinutes, match.AiLifeMinutes, match.BankMinutes }, Is.EqualTo(balances));
-            Assert.That(controller.View.Clocks[0].gameObject.activeSelf, Is.False); Assert.That(focus.IsPresentationCameraOwned, Is.False);
+            Assert.That(controller.View.Clocks[0].gameObject.activeSelf, Is.False);
+            Assert.That(match.ActiveParticipant, Is.EqualTo(Participant.Ai));
+            Assert.That(focus.IsPresentationCameraOwned, Is.True, "회수 소유가 끝난 뒤 새 AI 차례가 Overview 소유를 이어받는다");
+            var camera = focus.GetComponent<Camera>();
+            Assert.That(camera.transform.position, Is.EqualTo(focus.OverviewPosition));
+            Assert.That(Quaternion.Angle(camera.transform.rotation, focus.OverviewRotation), Is.LessThan(.001f));
+            Assert.That(camera.fieldOfView, Is.EqualTo(focus.OverviewFieldOfView));
             foreach (bool disableOwner in new[] { false, true })
             {
                 controller.RestartGame(); yield return Wait(() => controller.Match.Stage == TurnStage.AwaitingClock);

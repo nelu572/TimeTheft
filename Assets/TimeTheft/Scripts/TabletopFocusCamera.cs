@@ -53,6 +53,8 @@ namespace TimeTheft
         private readonly List<RaycastResult> uiHits = new List<RaycastResult>();
         private int suppressedPointerFrame = -1;
         private bool presentationCameraOwned;
+        public event System.Action EmptyTableClicked;
+        public event System.Action SecondaryClicked;
 
         public TabletopFocusTarget CurrentTarget { get; private set; }
         public TabletopFocusTarget HoveredTarget { get; private set; }
@@ -107,6 +109,10 @@ namespace TimeTheft
             if (presentationCameraOwned) return;
             var mouse = Mouse.current;
             var keyboard = Keyboard.current;
+            if (windowFocused && mouse != null && mouse.rightButton.wasPressedThisFrame &&
+                viewCamera.pixelRect.Contains(mouse.position.ReadValue()) &&
+                suppressedPointerFrame != Time.frameCount && !PointerOverUI(mouse.position.ReadValue()))
+                SecondaryClicked?.Invoke();
             if (windowFocused && HasCameraControl &&
                 ((mouse != null && mouse.rightButton.wasPressedThisFrame) ||
                  (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)))
@@ -145,6 +151,7 @@ namespace TimeTheft
             }
             // 클릭은 보조 ray나 경계 여유로 넓히지 않고, 현재 화면의 실제 대상만 사용한다.
             var clickTarget = target;
+            var clickCollider = hitCollider;
             if (pointerAvailable && magneticHover && state == ViewState.Free && ValidMagneticTarget())
             {
                 Ray currentRay = viewCamera.ScreenPointToRay(pointer);
@@ -171,6 +178,8 @@ namespace TimeTheft
                 clickTarget.Activate();
                 if (focusOnClick && clickTarget && clickTarget.IsAvailable) Focus(clickTarget);
             }
+            else if (pointerAvailable && mouse.leftButton.wasPressedThisFrame && clickCollider &&
+                !clickCollider.GetComponentInParent<TabletopFocusTarget>()) EmptyTableClicked?.Invoke();
         }
 
         public bool Focus(TabletopFocusTarget target)
@@ -243,6 +252,7 @@ namespace TimeTheft
         {
             collider = null;
             if (!Physics.Raycast(ray, out RaycastHit hit, rayDistance, interactionLayers, QueryTriggerInteraction.Ignore)) return null;
+            collider = hit.collider;
             var target = hit.collider.GetComponentInParent<TabletopFocusTarget>();
             if (!target || !target.IsAvailable || !target.InputEnabled) return null;
             collider = hit.collider;

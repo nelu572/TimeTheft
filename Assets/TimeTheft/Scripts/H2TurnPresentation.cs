@@ -19,6 +19,7 @@ namespace TimeTheft
         [Min(0)] public float SelectClearance = .1f;
         [Header("임시 확인 앵커 · 기존 슬롯 중심에 대한 월드 오프셋")]
         public Vector3 DecisionOffset = new Vector3(.1f, 0, -.9f);
+        public Vector3 OpponentDecisionOffset = new Vector3(.1f, 0, .9f);
         public Vector3 RevealOffset = new Vector3(.33f, .77f, -1.865f);
         public Vector3 RevealCameraOffset = new Vector3(-.28f, .97f, -1.58f);
         public Vector3 RevealLookOffset = new Vector3(0, .05f, 0);
@@ -36,6 +37,8 @@ namespace TimeTheft
         public TurnPhase Phase { get; private set; }
         public float PhaseElapsed { get; private set; }
         public int ClockIndex { get; private set; } = -1;
+        public bool IsOpponentTurn { get; private set; }
+        public bool IsResultPublic { get; private set; }
         public bool IsSelecting => Phase == TurnPhase.Selecting;
         public bool IsBusy => IsSelecting || Phase == TurnPhase.RevealEnter || Phase == TurnPhase.LegacyReturn ||
             Phase == TurnPhase.SettlementTransition || Phase == TurnPhase.Closing || Phase == TurnPhase.Returning;
@@ -46,9 +49,27 @@ namespace TimeTheft
             gameView && gameView.FocusCamera && index >= 0 && index < gameView.Clocks.Length &&
             gameView.Clocks[index].H2Presentation && gameView.Clocks[index].H2Presentation.isActiveAndEnabled;
 
-        public IEnumerator Select(TimeTheftGameView gameView, int index)
+        public void BeginOpponentTurn(TimeTheftGameView gameView)
+        {
+            if (!isActiveAndEnabled || !gameView || !gameView.FocusCamera) return;
+            view = gameView; focus = view.FocusCamera; presentationCamera = focus.GetComponent<Camera>();
+            if (!ownsCamera) { focus.BeginPresentationCamera(); ownsCamera = true; }
+            IsOpponentTurn = true; IsResultPublic = false;
+            HoldOverviewCamera();
+        }
+
+        private void HoldOverviewCamera()
+        {
+            presentationCamera.transform.SetPositionAndRotation(focus.OverviewPosition, focus.OverviewRotation);
+            presentationCamera.fieldOfView = focus.OverviewFieldOfView;
+        }
+
+        public IEnumerator Select(TimeTheftGameView gameView, int index, bool opponent = false)
         {
             int id = ++generation; Phase = TurnPhase.Selecting; PhaseElapsed = 0; skipMotion = false;
+            IsOpponentTurn = opponent;
+            IsResultPublic = false;
+            if (opponent) BeginOpponentTurn(gameView);
             // 열쇠 재선택 시 앞 시계를 안전하게 원래 슬롯으로 돌린 뒤 새 시계를 가져온다.
             if (ownsPose && model)
             {
@@ -73,7 +94,9 @@ namespace TimeTheft
             focus = view.FocusCamera; presentationCamera = focus.GetComponent<Camera>();
             center = Vector3.zero; foreach (var c in view.Clocks) center += c.transform.position / view.Clocks.Length;
             model.BeginBatchPose(); ownsPose = true;
-            var target = center + DecisionOffset; target.y = model.MotionRoot.position.y + DecisionOffset.y;
+            CapturePublicTableBasis();
+            var offset = opponent ? OpponentDecisionOffset : DecisionOffset;
+            var target = center + offset; target.y = model.MotionRoot.position.y + offset.y;
             Configure(selectClip, target);
             if (skipMotion) Sample(1);
             else yield return Progress(id, SelectDuration, TurnPhase.Selecting);
@@ -89,9 +112,16 @@ namespace TimeTheft
                 focus = view.FocusCamera; presentationCamera = focus.GetComponent<Camera>();
                 center = Vector3.zero; foreach (var c in view.Clocks) center += c.transform.position / view.Clocks.Length;
                 model.BeginBatchPose(); ownsPose = true;
+                CapturePublicTableBasis();
             }
             int id = ++generation;
             skipMotion = false;
+            if (IsOpponentTurn)
+            {
+                yield return RevealOpponent(id);
+                yield break;
+            }
+            IsResultPublic = true;
             var cameraStart = presentationCamera.transform.position; var cameraRotation = presentationCamera.transform.rotation;
             float cameraFov = presentationCamera.fieldOfView;
             var target = center + RevealOffset;
@@ -105,7 +135,8 @@ namespace TimeTheft
                 yield return null; if (id != generation || !ownsPose) yield break;
                 if (skipMotion) break;
                 PhaseElapsed = Mathf.Min(RevealEnterDuration, PhaseElapsed + Time.unscaledDeltaTime);
-                float u = PhaseElapsed / Mathf.Max(.01f, RevealEnterDuration); Sample(u);
+                float u = PhaseElapsed / Mathf.Max(.01f, RevealEnterDuration);
+                Sample(u);
                 float t = Mathf.Clamp01(cameraEase.Evaluate(u));
                 presentationCamera.transform.SetPositionAndRotation(Vector3.Lerp(cameraStart, cameraEnd, t), Quaternion.Slerp(cameraRotation, cameraEndRotation, t));
                 presentationCamera.fieldOfView = Mathf.Lerp(cameraFov, focus.OverviewFieldOfView, t);
@@ -114,6 +145,40 @@ namespace TimeTheft
             Sample(1); presentationCamera.transform.SetPositionAndRotation(cameraEnd, cameraEndRotation);
             presentationCamera.fieldOfView = focus.OverviewFieldOfView;
             Phase = TurnPhase.ResultPose; PhaseElapsed = 0;
+        }
+
+        private IEnumerator RevealOpponent(int id)
+        {
+            var root = model.MotionRoot;
+            var closedPosition = root.position; var closedRotation = root.rotation;
+            var inspectPosition = closedPosition + Vector3.up * .18f;
+            var inspectRotation = Quaternion.AngleAxis(32, Vector3.right) * Quaternion.AngleAxis(180, Vector3.up) * tableRotation;
+            Configure(revealClip, inspectPosition);
+            root.SetPositionAndRotation(closedPosition, closedRotation); model.HoldLidClosed();
+            Phase = TurnPhase.RevealEnter; PhaseElapsed = 0;
+            float duration = RevealEnterDuration + .35f;
+            while (id == generation && ownsPose && PhaseElapsed < duration)
+            {
+                yield return null; if (id != generation || !ownsPose) yield break;
+                if (skipMotion) break;
+                PhaseElapsed = Mathf.Min(duration, PhaseElapsed + Time.unscaledDeltaTime);
+                float u = PhaseElapsed / Mathf.Max(.01f, duration);
+                if (u < .45f)
+                {
+                    float open = u / .45f; Sample(open);
+                    float t = Mathf.SmoothStep(0, 1, open);
+                    root.SetPositionAndRotation(Vector3.Lerp(closedPosition, inspectPosition, t), Quaternion.Slerp(closedRotation, inspectRotation, t));
+                }
+                else
+                {
+                    Sample(1);
+                    root.SetPositionAndRotation(inspectPosition, inspectRotation);
+                }
+                HoldOverviewCamera();
+            }
+            if (id != generation || !ownsPose) yield break;
+            Sample(1); root.SetPositionAndRotation(inspectPosition, inspectRotation); HoldOverviewCamera();
+            IsResultPublic = true; Phase = TurnPhase.ResultPose; PhaseElapsed = 0;
         }
 
         // 새 Settlement/Close 모션은 재생하지 않는다. 기존 계수기 표시를 읽을 수 있도록 카메라만 반납한다.
@@ -159,6 +224,14 @@ namespace TimeTheft
             var sampledRotation = root.localRotation;
             root.localPosition = Vector3.Lerp(start, end, u) + root.parent.InverseTransformVector(residual);
             root.localRotation = rotation * Quaternion.Inverse(sourceRotation) * sampledRotation;
+            if (IsOpponentTurn && track == selectClip)
+                root.rotation = Quaternion.AngleAxis(180 * Mathf.SmoothStep(0, 1, u), Vector3.up) * root.rotation;
+            if (IsOpponentTurn && ownsCamera) HoldOverviewCamera();
+            if (onPublicTable && track == closeClip)
+            {
+                root.SetPositionAndRotation(publicTablePosition, publicTableRotation);
+                KeepAbovePublicTable();
+            }
         }
         private IEnumerator Progress(int id, float duration, TurnPhase phase)
         {
@@ -180,6 +253,9 @@ namespace TimeTheft
             else if (ownsPose && focus && focus.HasCameraControl)
             { focus.BeginPresentationCamera(); focus.EndPresentationCamera(); }
             ownsPose = ownsCamera = skipMotion = false; Phase = TurnPhase.Idle; PhaseElapsed = 0; ClockIndex = -1;
+            onPublicTable = false; tableMeshes = null; tableVertices = null;
+            IsOpponentTurn = false;
+            IsResultPublic = false;
         }
         public void SkipMotion() { if (IsBusy) skipMotion = true; }
         private void OnDisable()

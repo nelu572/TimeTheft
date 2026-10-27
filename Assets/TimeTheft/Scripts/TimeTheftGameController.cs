@@ -24,8 +24,9 @@ namespace TimeTheft
         {
             if (!settings) throw new InvalidOperationException("TimeTheftSettings를 연결하세요.");
             view = GetComponent<TimeTheftGameView>();
-            view.Initialize(SelectClock, ChooseAction, RestartGame);
+            view.Initialize(SelectClock, ChooseAction, RequestRestart);
             view.InitializeItemControls(SelectItem, UseSelectedItem, EndItemPhase, KeepPeekedClock);
+            view.InitializeMouseControls(SkipAnimation);
             RestartGame();
         }
 
@@ -34,7 +35,7 @@ namespace TimeTheft
             var keyboard = Keyboard.current;
             if (keyboard == null || !view) return;
             if (keyboard.hKey.wasPressedThisFrame) view.ToggleHelp();
-            if (keyboard.rKey.wasPressedThisFrame) RestartGame();
+            if (keyboard.rKey.wasPressedThisFrame) RequestRestart();
             if (keyboard.spaceKey.wasPressedThisFrame) SkipAnimation();
             if (Match != null && Match.Stage == TurnStage.AwaitingKeyDecision && Match.ActiveParticipant == Participant.Player)
             {
@@ -47,6 +48,14 @@ namespace TimeTheft
             if (keyboard.enterKey.wasPressedThisFrame) EndItemPhase();
         }
 
+        public void RequestRestart()
+        {
+            if (!isActiveAndEnabled || Match == null || Match.Stage != TurnStage.GameOver ||
+                !view || !view.IsResultVisible) return;
+            RestartGame();
+        }
+
+        // 초기 시작·실행용 테스트 사본의 초기화. 사용자 입력은 RequestRestart를 거친다.
         public void RestartGame()
         {
             if (!isActiveAndEnabled || !view) return;
@@ -107,6 +116,17 @@ namespace TimeTheft
         public void SelectClock(int index)
         {
             if (!isActiveAndEnabled || IsPresentingItem || selectingClock || Match == null) return;
+            if (Match.Stage == TurnStage.AwaitingItems && Match.ActiveParticipant == Participant.Player)
+            {
+                if (index < 0 || index >= TimeTheftMatch.ClocksPerBatch ||
+                    Match.GetClock(index).Visibility != ClockVisibility.Hidden) return;
+                if (view.SelectedItemId.HasValue)
+                {
+                    view.ShowContextNotice("선택한 아이템을 먼저 취소하세요 · 빈 테이블 / 우클릭");
+                    return;
+                }
+                if (!Match.EndItemPhase(Participant.Player)) return;
+            }
             if (Match.Stage == TurnStage.AwaitingKeyDecision)
             {
                 if (Match.ReselectPeekedClock(Participant.Player, index))
@@ -130,7 +150,7 @@ namespace TimeTheft
             var motion = view.TurnPresentation;
             if (!motion || !motion.CanPlay(view, Match.CurrentClock)) { selectingClock = false; yield break; }
             selectingClock = true; view.LockClockMotionInput();
-            yield return motion.Select(view, Match.CurrentClock);
+            yield return motion.Select(view, Match.CurrentClock, Match.ActiveParticipant == Participant.Ai);
             selectingClock = false;
             if (!isActiveAndEnabled) yield break;
             if (Match.Stage == TurnStage.AwaitingKeyDecision) view.OpenKeyDecision(Match);
@@ -186,6 +206,10 @@ namespace TimeTheft
 
         private IEnumerator OpenTurn()
         {
+            var turnMotion = view.TurnPresentation;
+            if (Match.ActiveParticipant == Participant.Ai && turnMotion)
+                for (int index = 0; index < TimeTheftMatch.ClocksPerBatch; index++)
+                    if (turnMotion.CanPlay(view, index)) { turnMotion.BeginOpponentTurn(view); break; }
             if (Match.Stage == TurnStage.AwaitingItems)
             {
                 view.ShowItemPhase(Match, 0);
@@ -205,7 +229,11 @@ namespace TimeTheft
                 }
             }
             view.OpenTurn(Match);
-            if (Match.ActiveParticipant != Participant.Ai) yield break;
+            if (Match.ActiveParticipant != Participant.Ai)
+            {
+                if (turnMotion && turnMotion.IsOpponentTurn) turnMotion.Cancel();
+                yield break;
+            }
             yield return Animate(settings.AiThinkDuration, null);
             var clockInfo = Match.ObserveItems(Participant.Ai);
             int selected = clockInfo.Strategy.Enabled ? TimeTheftAi.SelectClock(clockInfo, aiRandom)
@@ -309,9 +337,15 @@ namespace TimeTheft
                 result.Failure, effect, removed);
         }
 
+        public bool CanSkipAnimation => isActiveAndEnabled && Match != null && view && !view.IsResultVisible &&
+            ((view.Lifecycle && view.Lifecycle.IsRunning) || (view.TurnPresentation && view.TurnPresentation.IsBusy) ||
+             IsPresentingItem || (Match.Stage != TurnStage.AwaitingAction && Match.Stage != TurnStage.AwaitingClock &&
+                Match.Stage != TurnStage.AwaitingItems && Match.Stage != TurnStage.AwaitingKeyDecision &&
+                Match.Stage != TurnStage.BatchPreview));
+
         public void SkipAnimation()
         {
-            if (!isActiveAndEnabled || Match == null) return;
+            if (!CanSkipAnimation) return;
             var lifecycle = view.Lifecycle;
             if (lifecycle && lifecycle.IsRunning) { lifecycle.SkipMotion(); return; }
             var motion = view.TurnPresentation;

@@ -8,9 +8,12 @@ namespace TimeTheft
     {
         [Header("테이블 위 아이템 · 표시와 마우스 입력")]
         [SerializeField] private ItemWorldInventoryView worldItems;
-        private UnityEngine.UI.Button useItemButton, endItemsButton, keepClockButton;
+        private UnityEngine.UI.Button useItemButton, endItemsButton, keepClockButton, cancelItemButton;
         private TextMeshProUGUI itemDetailLabel;
         private Action useSelectedItem, endItems, keepClock;
+        private Action<int> selectItem;
+        private double lastItemClick = double.NegativeInfinity;
+        private const double ItemConfirmQuietSeconds = .32;
         private TimeTheftMatch itemMatch;
         private TabletopFocusTarget lastItemHoverTarget;
         private ItemWorldView hoveredItem;
@@ -21,12 +24,14 @@ namespace TimeTheft
         public UnityEngine.UI.Button UseItemButton => useItemButton;
         public UnityEngine.UI.Button EndItemsButton => endItemsButton;
         public UnityEngine.UI.Button KeepClockButton => keepClockButton;
+        public UnityEngine.UI.Button CancelItemButton => cancelItemButton;
         public TextMeshProUGUI ItemDetailLabel => itemDetailLabel;
 
         public void InitializeItemControls(Action<int> select, Action use, Action end, Action keep)
         {
             if (!worldItems) throw new InvalidOperationException("월드 아이템 표시부를 연결하세요.");
-            worldItems.Initialize(select);
+            selectItem = select;
+            worldItems.Initialize(ClickWorldItem);
             useSelectedItem = use;
             endItems = end;
             keepClock = keep;
@@ -37,7 +42,27 @@ namespace TimeTheft
             useItemButton = CreateItemButton("Use Item", "사용", -135, UseSelectedItem);
             endItemsButton = CreateItemButton("End Items", "시계 선택", 135, EndItems);
             keepClockButton = CreateItemButton("Keep Clock", "이 시계 유지", 0, KeepClock);
+            cancelItemButton = CreateItemButton("Cancel Item Selection", "선택 취소", -270, CancelItemSelection);
             HideItemButtons();
+            InitializeContextUi();
+        }
+
+        private void ClickWorldItem(int id)
+        {
+            if (itemPresentation || itemMatch == null || !itemMatch.CanUseItems(Participant.Player)) return;
+            double now = Time.unscaledTimeAsDouble;
+            if (SelectedItemId != id)
+            {
+                selectItem?.Invoke(id);
+                lastItemClick = now;
+                return;
+            }
+            double quiet = now - lastItemClick;
+            // 빠른 두 번째/세 번째 클릭을 예약하지 않는다. 연타가 끝난 뒤 새 클릭이 필요하다.
+            lastItemClick = now;
+            if (quiet < ItemConfirmQuietSeconds) return;
+            focusCamera.SuppressPointerForCurrentFrame();
+            useSelectedItem?.Invoke();
         }
 
         public void ConfigureItemRules(GameRules rules)
@@ -52,7 +77,7 @@ namespace TimeTheft
             var font = phaseLabel.font;
             if (!font || font.atlasPopulationMode == AtlasPopulationMode.Static) return;
             var text = new System.Text.StringBuilder("0123456789%#()+- · / → "
-                + "사용 시계 선택 이 시계 유지 선택: 상대 상대의 보유품 사용할 수 없습니다 "
+                + "사용 시계 선택 이 시계 유지 선택 취소 도움말 닫기 테이블로 연출 단축 확대 복귀 종료 전표 다시하기 상대 상대의 보유품 사용할 수 없습니다 "
                 + "아이템 클릭으로 선택 사용 버튼으로 확정 아이템 사용을 마치려면 시계 선택 "
                 + "클릭으로 선택 선택만으로 소모되지 않습니다 자기 차례 아이템 단계에서 사용 가능 "
                 + "[공통 기반 테스트] 내 차례 아이템 단계 개 아이템을 클릭해 선택하거나 시계 선택으로 진행하세요");
@@ -75,6 +100,7 @@ namespace TimeTheft
                 if (item.Id != id) continue;
                 itemMatch = match;
                 SelectedItemId = id;
+                lastItemClick = Time.unscaledTimeAsDouble;
                 SelectedTestItemId = item.IsFoundationTest ? id : (int?)null;
                 RefreshWorldItems();
                 RefreshItemControls();
@@ -97,7 +123,7 @@ namespace TimeTheft
         {
             itemMatch = match;
             itemPresentation = presenting;
-            if (clearSelection) SelectedItemId = SelectedTestItemId = null;
+            if (clearSelection) { SelectedItemId = SelectedTestItemId = null; lastItemClick = double.NegativeInfinity; }
             // 근접 공개/정산 중 임시 블록이 핵심 정보를 가리지 않도록 표시만 잠시 숨긴다.
             if (worldItems) worldItems.SetVisible(!presenting && match.Stage != TurnStage.BatchPreview);
             RefreshWorldItems();
@@ -131,8 +157,10 @@ namespace TimeTheft
 
         private void Update()
         {
+            RefreshMouseControls();
             if (!initialized || !itemDetailLabel || !focusCamera) return;
             var target = CanHoverItems ? focusCamera.HoveredTarget : null;
+            if (!target && PointerOverItemCard()) return;
             if (lastItemHoverTarget == target) return;
             lastItemHoverTarget = target;
             hoveredItem = target ? target.GetComponent<ItemWorldView>() : null;
@@ -143,11 +171,9 @@ namespace TimeTheft
         {
             if (!useItemButton) return;
             bool items = !itemPresentation && itemMatch != null && itemMatch.CanUseItems(Participant.Player);
-            useItemButton.gameObject.SetActive(items);
-            endItemsButton.gameObject.SetActive(items);
-            endItemsButton.interactable = items;
-            useItemButton.interactable = items && SelectedItemId.HasValue &&
-                itemMatch.CheckItemUse(Participant.Player, SelectedItemId.Value) == ItemUseFailure.None;
+            SetButton(useItemButton, false);
+            SetButton(endItemsButton, false);
+            SetButton(cancelItemButton, false);
             bool key = !itemPresentation && itemMatch != null && itemMatch.ActiveParticipant == Participant.Player &&
                 itemMatch.Stage == TurnStage.AwaitingKeyDecision;
             keepClockButton.gameObject.SetActive(key);
@@ -176,9 +202,7 @@ namespace TimeTheft
             }
             else if (selected.HasValue)
                 itemDetailLabel.text = ItemName(selected.Value.Kind) + " · " + DescribeItem(selected.Value.Kind);
-            else
-                itemDetailLabel.text = itemMatch.CanUseItems(Participant.Player)
-                    ? "아이템 클릭으로 선택 → 사용 버튼으로 확정\n아이템 사용을 마치려면 시계 선택" : "";
+            else itemDetailLabel.text = "";
 
             if (selected.HasValue)
             {
@@ -187,7 +211,7 @@ namespace TimeTheft
                 itemDetailLabel.text += "\n선택: " + selectedName + " · " + ItemFailureText(itemMatch.CheckItemUse(Participant.Player, item.Id));
             }
             else if (hover && hoveredItem.Owner == Participant.Player)
-                itemDetailLabel.text += itemMatch.CanUseItems(Participant.Player) ? "\n클릭으로 선택 · 선택만으로 소모되지 않습니다" : "\n자기 차례 아이템 단계에서 사용 가능";
+                itemDetailLabel.text += itemMatch.CanUseItems(Participant.Player) ? "\n클릭으로 선택 · 같은 아이템을 다시 클릭해 사용" : "\n자기 차례 아이템 단계에서 사용 가능";
         }
 
         private string DescribeItem(ItemKind? kind)
@@ -218,7 +242,7 @@ namespace TimeTheft
 
         private void HideItemButtons()
         {
-            foreach (var button in new[] { useItemButton, endItemsButton, keepClockButton })
+            foreach (var button in new[] { useItemButton, endItemsButton, keepClockButton, cancelItemButton })
                 if (button) { button.interactable = false; button.gameObject.SetActive(false); }
         }
 
@@ -244,6 +268,17 @@ namespace TimeTheft
             focusCamera.SuppressPointerForCurrentFrame();
             HideItemButtons();
             keepClock?.Invoke();
+        }
+
+        public void CancelItemSelection()
+        {
+            if (itemPresentation || itemMatch == null || !itemMatch.CanUseItems(Participant.Player) ||
+                !SelectedItemId.HasValue) return;
+            focusCamera.SuppressPointerForCurrentFrame();
+            SelectedItemId = SelectedTestItemId = null;
+            lastItemClick = double.NegativeInfinity;
+            RefreshWorldItems();
+            RefreshItemControls();
         }
 
         private TextMeshProUGUI CreateItemText(string name, Vector2 size, Vector2 position)
@@ -299,13 +334,18 @@ namespace TimeTheft
 
         private void CancelItemControls()
         {
+            HideClockContext();
             itemMatch = null;
             itemPresentation = true;
+            lastItemClick = double.NegativeInfinity;
             lastItemHoverTarget = null;
             hoveredItem = null;
             HideItemButtons();
             if (itemDetailLabel) itemDetailLabel.text = "";
             if (worldItems) { worldItems.ResetItems(); worldItems.SetVisible(false); }
+            if (itemGroup) { itemGroup.alpha = 0; itemGroup.blocksRaycasts = false; }
+            if (actionGroup) { actionGroup.alpha = 0; actionGroup.blocksRaycasts = false; }
+            if (noticeGroup) noticeGroup.alpha = 0;
         }
 
         private void DestroyItemControls()
@@ -313,6 +353,7 @@ namespace TimeTheft
             if (useItemButton) { useItemButton.onClick.RemoveListener(UseSelectedItem); Destroy(useItemButton.gameObject); }
             if (endItemsButton) { endItemsButton.onClick.RemoveListener(EndItems); Destroy(endItemsButton.gameObject); }
             if (keepClockButton) { keepClockButton.onClick.RemoveListener(KeepClock); Destroy(keepClockButton.gameObject); }
+            if (cancelItemButton) { cancelItemButton.onClick.RemoveListener(CancelItemSelection); Destroy(cancelItemButton.gameObject); }
             if (itemDetailLabel) Destroy(itemDetailLabel.gameObject);
         }
     }

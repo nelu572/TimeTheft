@@ -19,6 +19,8 @@ namespace TimeTheft
         private System.Collections.ObjectModel.ReadOnlyCollection<ItemWorldView> playerView, opponentView;
         private Action<int> select;
         private bool? opponentKindsVisible;
+        private TMPro.TMP_FontAsset labelFont;
+        public void SetLabelFont(TMPro.TMP_FontAsset font) => labelFont = font;
 
         public IReadOnlyList<ItemWorldView> PlayerItems => playerView ?? (playerView = playerItems.AsReadOnly());
         public IReadOnlyList<ItemWorldView> OpponentItems => opponentView ?? (opponentView = opponentItems.AsReadOnly());
@@ -123,6 +125,9 @@ namespace TimeTheft
             var item = Instantiate(itemPrefab, anchor, false);
             item.name = owner == Participant.Player ? "Item " + id : "Opponent Item";
             item.transform.localScale = Vector3.one * scale;
+            if (labelFont)
+                foreach (var text in item.GetComponentsInChildren<TMPro.TMP_Text>(true))
+                { text.font = labelFont; text.fontSharedMaterial = labelFont.material; }
             item.Initialize(owner, id, kind, select);
             return item;
         }

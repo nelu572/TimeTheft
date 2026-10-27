@@ -53,6 +53,11 @@ namespace TimeTheft
         }
 
         public void CaptureBatchReturnPose() { returnPosition = MotionRoot.localPosition; returnRotation = MotionRoot.localRotation; }
+        public void HoldLidClosed()
+        {
+            watch.SetLidAngle(0); IsOpen = false;
+            if (extendedHoursLabel) extendedHoursLabel.enabled = false;
+        }
         public void ReturnBatchPose(float progress)
         {
             MotionRoot.localPosition = Vector3.Lerp(returnPosition, motionHome, progress);

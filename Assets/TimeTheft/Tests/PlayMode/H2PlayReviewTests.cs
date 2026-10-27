@@ -181,7 +181,7 @@ namespace TimeTheft.Tests
             Assert.That(settings.ResultHoldDuration, Is.EqualTo(originalSettings.ResultHoldDuration));
             Assert.That(settings.ResultHoldDuration, Is.GreaterThanOrEqualTo(1), "결과 관찰 시간을 줄여 잔류 문구 문제를 감추지 않는다");
             var serialized = new SerializedObject(controller.View);
-            var deltas = new[] { "playerDelta", "aiDelta", "bankDelta" }
+            var deltas = new[] { "bankDelta", "playerDelta", "aiDelta" }
                 .Select(name => (TextMeshPro)serialized.FindProperty(name).objectReferenceValue).ToArray();
             controller.RestartGame();
             yield return Wait(() => controller.Match.Stage == TurnStage.AwaitingClock);
@@ -193,21 +193,49 @@ namespace TimeTheft.Tests
             var balances = Balances();
             Assert.That(controller.Match.UsedCount, Is.EqualTo(1));
             AssertDeltasVisible(deltas);
+            yield return Wait(() =>
+            {
+                Canvas.ForceUpdateCanvases();
+                return Enumerable.Range(0, deltas.Length).All(i => !deltas[i].gameObject.activeSelf ||
+                    controller.View.CounterDeltaLabels[i].canvasRenderer.GetInheritedAlpha() > .99f);
+            });
+            AssertDeltaOverlays(deltas);
+            // 표시가 화면 고정값이 아니라 실제 계측부 투영을 따르는지 별도로 확인한다.
+            var cameraPosition = camera.transform.position;
+            var originalCenters = controller.View.CounterDeltaLabels.Select(label => ScreenRect(label.rectTransform).center).ToArray();
+            try
+            {
+                camera.transform.position += new Vector3(.12f, .04f, 0);
+                Canvas.ForceUpdateCanvases();
+                AssertDeltaOverlays(deltas);
+                for (int i = 0; i < deltas.Length; i++) if (deltas[i].gameObject.activeSelf)
+                    Assert.That(Vector2.Distance(ScreenRect(controller.View.CounterDeltaLabels[i].rectTransform).center, originalCenters[i]),
+                        Is.GreaterThan(.5f), "카메라가 움직이면 변화량도 원 계측부를 따라 이동한다");
+            }
+            finally
+            {
+                camera.transform.position = cameraPosition;
+                Canvas.ForceUpdateCanvases();
+            }
             Assert.That(controller.View.PlayerLife.text, Is.EqualTo(GameTime.Format(balances[0])));
             Assert.That(controller.View.AiLife.text, Is.EqualTo(GameTime.Format(balances[1])));
             Assert.That(controller.View.Bank.text, Is.EqualTo(GameTime.Format(balances[2])));
             int closed = 0, removed = 0, removedIndex = -1;
-            bool readableAtClose = false, clearedAtRemoval = false, hiddenAtRemoval = false, discarded = true;
+            bool readableAtClose = false, fadedAtClose = false, clearedAtRemoval = false, hiddenAtRemoval = false, discarded = true;
             float removedAt = 0;
             Action<int> onClose = index =>
             {
                 closed++;
                 readableAtClose = index == 0 && deltas.Count(label => label.gameObject.activeSelf && !string.IsNullOrEmpty(label.text)) >= 2;
+                Canvas.ForceUpdateCanvases();
+                fadedAtClose = controller.View.CounterDeltaLabels.All(label => !label.gameObject.activeInHierarchy || label.canvasRenderer.GetInheritedAlpha() < .99f);
             };
             Action<int, bool> onRemove = (index, isDiscarded) =>
             {
                 removed++; removedIndex = index; discarded = isDiscarded; removedAt = Time.realtimeSinceStartup;
                 clearedAtRemoval = deltas.All(label => label.text == "" && !label.gameObject.activeSelf);
+                Canvas.ForceUpdateCanvases();
+                clearedAtRemoval &= controller.View.CounterDeltaLabels.All(label => label.text == "" && label.canvasRenderer.GetInheritedAlpha() <= .01f);
                 var model = controller.View.Clocks[index].H2Presentation;
                 hiddenAtRemoval = !model.IsOpen && !model.IsRed && !model.DisplayedHours.HasValue;
             };
@@ -217,8 +245,10 @@ namespace TimeTheft.Tests
                 yield return new WaitForSecondsRealtime(settings.ResultHoldDuration / 2);
                 Assert.That(motion.Phase, Is.EqualTo(H2TurnPresentation.TurnPhase.SettlementHold));
                 AssertDeltasVisible(deltas);
+                AssertDeltaOverlays(deltas);
                 yield return Wait(() => removed == 1);
                 Assert.That(closed, Is.EqualTo(1)); Assert.That(readableAtClose, Is.True);
+                Assert.That(fadedAtClose, Is.True, "3D 계산 API를 보존하며 2D 표시는 Closing부터 퇴장한다");
                 Assert.That(removedIndex, Is.Zero); Assert.That(discarded, Is.False);
                 Assert.That(removedAt - readableAt, Is.GreaterThanOrEqualTo(settings.ResultHoldDuration));
                 Assert.That(clearedAtRemoval, Is.True, "LockLifecycleInput 이후 실제 Remove 경계에서 모든 Delta를 지운다");
@@ -233,8 +263,102 @@ namespace TimeTheft.Tests
         }
 
         private int[] Balances() => new[] { controller.Match.PlayerLifeMinutes, controller.Match.AiLifeMinutes, controller.Match.BankMinutes };
+
+        [UnityTest] public IEnumerator BothRationRecipientsTrackTheirOwnMeasuringHeadThroughActualCameraProjection()
+        {
+            var serialized = new SerializedObject(controller.View);
+            var deltas = new[] { "bankDelta", "playerDelta", "aiDelta" }
+                .Select(name => (TextMeshPro)serialized.FindProperty(name).objectReferenceValue).ToArray();
+            foreach (var kind in new[] { ClockKind.Normal, ClockKind.Red })
+            {
+                controller.RestartGame();
+                yield return Wait(() => controller.Match.Stage == TurnStage.AwaitingClock);
+                int index = -1;
+                for (int i = 0; i < 5; i++)
+                {
+                    // 테스트 오라클만 공개 규칙을 독립 실행한다. 실제 런타임의 숨은 Face를 조회하지 않는다.
+                    var reference = new TimeTheftMatch(settings.Rules, new System.Random(settings.RandomSeed));
+                    reference.BeginBatch(); reference.CloseAndShuffle(); reference.CompleteShuffle();
+                    reference.SelectClock(Participant.Player, i); reference.CommitAction(Participant.Player, TimeAction.Ration);
+                    if (reference.GetClock(i).Face.Value.Kind == kind) { index = i; break; }
+                }
+                Assert.That(index, Is.GreaterThanOrEqualTo(0));
+                controller.SelectClock(index); yield return GameUiTestInput.ClockMotionReady(controller);
+                controller.ChooseAction(TimeAction.Ration);
+                Assert.That(controller.Match.GetClock(index).Face.Value.Kind, Is.EqualTo(kind));
+                yield return Wait(() => controller.View.TurnPresentation.Phase == H2TurnPresentation.TurnPhase.SettlementHold);
+                yield return Wait(() =>
+                {
+                    Canvas.ForceUpdateCanvases();
+                    return Enumerable.Range(0, 3).All(i => !deltas[i].gameObject.activeSelf ||
+                        controller.View.CounterDeltaLabels[i].canvasRenderer.GetInheritedAlpha() > .99f);
+                });
+                AssertDeltaOverlays(deltas);
+                var recipient = kind == ClockKind.Normal ? controller.View.PlayerDeltaLabel : controller.View.OpponentDeltaLabel;
+                Assert.That(recipient.text, Does.StartWith("+"));
+                Assert.That(controller.View.BankDeltaLabel.text, Does.StartWith("-"));
+                Assert.That(controller.Match.UsedCount, Is.EqualTo(1));
+            }
+        }
+
         private static void AssertDeltasVisible(TextMeshPro[] labels) =>
             Assert.That(labels.Count(label => label.gameObject.activeSelf && !string.IsNullOrEmpty(label.text)), Is.GreaterThanOrEqualTo(2));
+
+        private void AssertDeltaOverlays(TextMeshPro[] sources)
+        {
+            Canvas.ForceUpdateCanvases();
+            var view = controller.View;
+            Assert.That(view.CounterDeltaLabels.Count, Is.EqualTo(3));
+            Assert.That(view.CounterDeltaLabels[0], Is.SameAs(view.BankDeltaLabel));
+            Assert.That(view.CounterDeltaLabels[1], Is.SameAs(view.PlayerDeltaLabel));
+            Assert.That(view.CounterDeltaLabels[2], Is.SameAs(view.OpponentDeltaLabel));
+            Assert.That(view.PublicActionLabel.text, Is.Empty);
+            Assert.That(view.PublicActionLabel.gameObject.activeInHierarchy, Is.False);
+            Assert.That(view.PublicTransferLabel.text, Is.Empty);
+            Assert.That(view.PublicTransferLabel.gameObject.activeInHierarchy, Is.False, "계수기 변화량 외 경로 카드를 겹쳐 표시하지 않는다");
+            string[] names = { "Bank", "Player", "Opponent" };
+            var counter = view.Bank.GetComponentInParent<TabletopFocusTarget>();
+            var renderers = counter.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < sources.Length; i++)
+            {
+                var source = sources[i]; var shown = view.CounterDeltaLabels[i];
+                Assert.That(source.GetComponent<Renderer>().enabled, Is.False, "기존 3D 변화량의 중복 렌더링을 숨긴다");
+                Assert.That(shown.raycastTarget, Is.False);
+                if (!source.gameObject.activeSelf)
+                {
+                    Assert.That(string.IsNullOrEmpty(shown.text) || shown.canvasRenderer.GetInheritedAlpha() <= .01f, Is.True);
+                    continue;
+                }
+                Assert.That(shown.isActiveAndEnabled, Is.True);
+                Assert.That(shown.text, Is.EqualTo(source.text.Replace('−', '-')));
+                Assert.That(shown.canvasRenderer.GetInheritedAlpha(), Is.GreaterThan(.99f));
+                var pane = renderers.SingleOrDefault(renderer => renderer.name == names[i] + "Pane");
+                var number = i == 0 ? view.Bank : i == 1 ? view.PlayerLife : view.AiLife;
+                var bounds = pane ? pane.bounds : number.GetComponent<Renderer>().bounds;
+                Vector2 minimum = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+                Vector2 maximum = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    var projected = camera.WorldToScreenPoint(bounds.center + Vector3.Scale(bounds.extents,
+                        new Vector3((corner & 1) == 0 ? -1 : 1, (corner & 2) == 0 ? -1 : 1, (corner & 4) == 0 ? -1 : 1)));
+                    Assert.That(projected.z, Is.GreaterThan(0));
+                    minimum = Vector2.Min(minimum, projected); maximum = Vector2.Max(maximum, projected);
+                }
+                var rect = ScreenRect(shown.rectTransform);
+                float tolerance = Mathf.Max(2, 4 * shown.canvas.scaleFactor);
+                Assert.That(rect.center.x, Is.EqualTo((minimum.x + maximum.x) * .5f).Within(tolerance), names[i] + " 계측부 가로 중심을 추적한다");
+                Assert.That(rect.yMin, Is.GreaterThanOrEqualTo(maximum.y - tolerance), names[i] + " 계측부 위에 표시한다");
+                Assert.That(rect.xMin, Is.GreaterThanOrEqualTo(0)); Assert.That(rect.xMax, Is.LessThanOrEqualTo(Screen.width));
+                Assert.That(rect.yMin, Is.GreaterThanOrEqualTo(0)); Assert.That(rect.yMax, Is.LessThanOrEqualTo(Screen.height));
+            }
+        }
+
+        private static Rect ScreenRect(RectTransform rect)
+        {
+            var corners = new Vector3[4]; rect.GetWorldCorners(corners);
+            var points = corners.Select(corner => RectTransformUtility.WorldToScreenPoint(null, corner)).ToArray();
+            return Rect.MinMaxRect(points.Min(point => point.x), points.Min(point => point.y), points.Max(point => point.x), points.Max(point => point.y));
+        }
         private void AssertWorldItemsVisible(bool visible)
         {
             Assert.That(controller.View.WorldItems.PlayerAnchor.gameObject.activeSelf, Is.EqualTo(visible));

@@ -19,7 +19,7 @@ namespace TimeTheft.Tests
         private TimeTheftGameController controller;private TimeTheftSettings settings;
         private H2ShufflePresentation shuffle;private Camera camera;private TabletopFocusCamera focus;
         private InputTestFixture input;private Mouse mouse;private Keyboard keyboard;private float oldTime;
-        [Serializable] private sealed class Trace { public int[] destinationToSource,startInstanceIds,endInstanceIds;public string[] endMeshCenters;public float minimumCaseGap;public int passes; }
+        [Serializable] private sealed class Trace { public int[] destinationToSource,startInstanceIds,endInstanceIds;public string[] endMeshCenters;public float maximumCentralSeparation,maximumHeightDrift;public int passes; }
         [Serializable] private sealed class Traces { public Trace[] permutations; }
         private sealed class ForcedRandom: System.Random
         {
@@ -52,12 +52,18 @@ namespace TimeTheft.Tests
             if(settings)UnityEngine.Object.Destroy(settings);Time.timeScale=oldTime;yield return null;input.TearDown();
         }
         private static Renderer Case(ClockTokenView token)=>token.H2Presentation.Watch.GetComponentsInChildren<Renderer>().Single(r=>r.name=="Case");
+        private static Bounds WholeWatch(ClockTokenView token)
+        {
+            var parts = token.H2Presentation.Watch.GetComponentsInChildren<Renderer>();
+            var bounds = parts[0].bounds; foreach (var part in parts) bounds.Encapsulate(part.bounds);
+            return bounds;
+        }
         private void Hidden()
         {
             foreach(var token in controller.View.Clocks)
             {var h=token.H2Presentation;Assert.That(h.IsOpen||h.IsRed,Is.False);Assert.That(h.DisplayedHours,Is.Null);Assert.That(token.SelectionTarget.InputEnabled,Is.False);Assert.That(Quaternion.Angle(h.Watch.LidPivot.localRotation,Quaternion.identity),Is.LessThan(.001));}
         }
-        [UnityTest] public IEnumerator All120PermutationsTrackRealMeshObjectsThroughClosedCollisionFreePathsAndRebase()
+        [UnityTest] public IEnumerator All120PermutationsOverlapAtOneTablePositionWithoutChangingHeightAndRebase()
         {
             var traces=new List<Trace>();int count=0;
             foreach(var desired in Permutations())
@@ -68,24 +74,36 @@ namespace TimeTheft.Tests
                 var sources=controller.View.Clocks;var ids=sources.Select(c=>c.GetInstanceID()).ToArray();
                 var slots=sources.Select(c=>c.transform.position).ToArray();var offsets=sources.Select(c=>Case(c).bounds.center-c.transform.position).ToArray();
                 shuffle.Prepare(controller.View,match.LastShuffle);shuffle.Prepare(controller.View,match.LastShuffle);
-                Assert.That(shuffle.PassCount,Is.InRange(0,5));var prior=sources.Select(c=>Case(c).bounds.center).ToArray();float gap=float.MaxValue;
-                for(int f=0;f<=60;f++)
+                Assert.That(shuffle.PassCount,Is.InRange(0,5));var prior=sources.Select(c=>Case(c).bounds.center).ToArray();
+                var renderers = sources.Select(token => token.H2Presentation.Watch.GetComponentsInChildren<Renderer>(true)).ToArray();
+                var flags = renderers.Select(parts => parts.Select(part => part.enabled).ToArray()).ToArray();
+                var baseHeights = sources.Select(token => WholeWatch(token).min.y).ToArray();
+                bool overlapObserved = false; float maximumSeparation = 0, maximumHeightDrift = 0;
+                for(int f=0;f<=120;f++)
                 {
-                    shuffle.Frame(f/60f);Hidden();
+                    float progress = f / 120f; shuffle.Frame(progress);Hidden();
+                    var frameBounds = sources.Select(WholeWatch).ToArray();
                     for(int s=0;s<5;s++)
                     {
                         var b=Case(sources[s]).bounds;Assert.That(Vector3.Distance(prior[s],b.center),Is.LessThan(.65f),"연속된 실제 메시 위치 / "+string.Join(",",desired));prior[s]=b.center;
                         Assert.That(sources[s].H2Presentation.MotionRoot.localPosition,Is.EqualTo(Vector3.zero));
-                        for(int other=s+1;other<5;other++)
+                        maximumHeightDrift = Mathf.Max(maximumHeightDrift, Mathf.Abs(sources[s].transform.position.y - slots[s].y));
+                        Assert.That(sources[s].transform.position.y, Is.EqualTo(slots[s].y).Within(.00001f), "집결/혼합/펼침 전체에서 테이블 높이를 유지한다");
+                        Assert.That(frameBounds[s].min.y, Is.EqualTo(baseHeights[s]).Within(.001f), "시계 메시를 공중으로 띄우지 않는다");
+                        if (progress >= .28f && progress < .72f)
                         {
-                            var ob=Case(sources[other]).bounds;var delta=b.center-ob.center;delta.y=0;
-                            float clearance=delta.magnitude-.5f*Mathf.Max(b.size.x,b.size.z)-.5f*Mathf.Max(ob.size.x,ob.size.z);
-                            gap=Mathf.Min(gap,clearance);Assert.That(clearance,Is.GreaterThan(.02f),"Case clearance / "+string.Join(",",desired));
+                            float separation = Vector3.Distance(sources[s].transform.position, sources[0].transform.position);
+                            maximumSeparation = Mathf.Max(maximumSeparation, separation);
+                            Assert.That(separation, Is.LessThan(.00001f), "중앙 혼합 중 다섯 시계의 XYZ가 완전히 일치한다");
+                            overlapObserved = true;
                         }
                         var p=camera.WorldToViewportPoint(b.center);Assert.That(p.x,Is.InRange(.02f,.98f));Assert.That(p.y,Is.InRange(.02f,.98f));
                     }
+                    if (progress >= .28f && progress < .72f)
+                        Assert.That(renderers.Count(parts => parts.Any(part => part.enabled)), Is.EqualTo(1), "동일 위치의 중복 렌더링만 억제한다");
                     if(f%15==0)yield return null;
                 }
+                Assert.That(overlapObserved, Is.True);
                 shuffle.Complete();shuffle.Complete();var final=controller.View.Clocks;
                 for(int dest=0;dest<5;dest++)
                 {
@@ -93,8 +111,10 @@ namespace TimeTheft.Tests
                     Assert.That(Vector3.Distance(final[dest].transform.position,slots[dest]),Is.LessThan(.00001f));
                     Assert.That(Vector3.Distance(Case(final[dest]).bounds.center,slots[dest]+offsets[source]),Is.LessThan(.00001f));
                 }
+                for (int s = 0; s < renderers.Length; s++)
+                    Assert.That(renderers[s].Select(part => part.enabled), Is.EqualTo(flags[s]), "완료 후 원래 Renderer 상태를 복구한다");
                 Assert.That(focus.IsPresentationCameraOwned,Is.False);
-                traces.Add(new Trace{destinationToSource=desired,startInstanceIds=ids,endInstanceIds=final.Select(c=>c.GetInstanceID()).ToArray(),endMeshCenters=final.Select(c=>Case(c).bounds.center.ToString("F5")).ToArray(),minimumCaseGap=gap,passes=shuffle.PassCount});count++;
+                traces.Add(new Trace{destinationToSource=desired,startInstanceIds=ids,endInstanceIds=final.Select(c=>c.GetInstanceID()).ToArray(),endMeshCenters=final.Select(c=>Case(c).bounds.center.ToString("F5")).ToArray(),maximumCentralSeparation=maximumSeparation,maximumHeightDrift=maximumHeightDrift,passes=shuffle.PassCount});count++;
             }
             Assert.That(count,Is.EqualTo(120));Directory.CreateDirectory("Temp/H2Shuffle");File.WriteAllText("Temp/H2Shuffle/all120-physical-traces.json",JsonUtility.ToJson(new Traces{permutations=traces.ToArray()},true));
         }
@@ -153,18 +173,44 @@ namespace TimeTheft.Tests
             yield return Wait(()=>controller.Match.ActiveParticipant==Participant.Player&&controller.Match.Stage==TurnStage.AwaitingClock);
             Assert.That(controller.Match.UsedCount,Is.EqualTo(1));Assert.That(focus.IsPresentationCameraOwned,Is.False);
         }
-        [UnityTest] public IEnumerator OuterPairKeepsTheOriginalMirroredLaneAndYaw()
+        [UnityTest] public IEnumerator OuterPairKeepsTheOriginalMirroredYawInsideTheCompactMix()
         {
             controller.RestartGame();controller.StopAllCoroutines();controller.View.CancelPresentation();
             var rng=new ForcedRandom(new[]{0,1,2,4,3});var match=new TimeTheftMatch(new GameRules{InitialItemCount=0,ItemsPerBatch=0},rng,new System.Random(1));
-            match.BeginBatch();rng.Closing=true;match.CloseAndShuffle();shuffle.Prepare(controller.View,match.LastShuffle);shuffle.Frame(.45f);
+            match.BeginBatch();rng.Closing=true;match.CloseAndShuffle();shuffle.Prepare(controller.View,match.LastShuffle);shuffle.Frame(.5f);
             var model=shuffle.PhysicalSources[3].H2Presentation;
             var source=AssetDatabase.LoadAllAssetsAtPath("Assets/TimeTheft/PocketWatch/Shuffle/Source/Shuffle_Clock03.fbx").OfType<AnimationClip>().First(c=>!c.name.StartsWith("__preview__"));
             var bindings=AnimationUtility.GetCurveBindings(source);var values=new float[4];int i=0;
             foreach(string component in new[]{"x","y","z","w"})
-            {var b=bindings.First(k=>k.path=="H2_Watch/MotionRoot"&&k.propertyName=="m_LocalRotation."+component);values[i++]=AnimationUtility.GetEditorCurve(source,b).Evaluate(4.5f/24);}
+            {var b=bindings.First(k=>k.path=="H2_Watch/MotionRoot"&&k.propertyName=="m_LocalRotation."+component);values[i++]=AnimationUtility.GetEditorCurve(source,b).Evaluate(5f/24);}
             Assert.That(Quaternion.Angle(model.MotionRoot.localRotation,new Quaternion(values[0],values[1],values[2],values[3])),Is.LessThan(.001f));
             shuffle.Cancel();yield return null;
+        }
+        [UnityTest] public IEnumerator IdentityStillMixesAtOneTablePositionAndRestoresOriginalRenderers()
+        {
+            controller.RestartGame(); controller.StopAllCoroutines(); controller.View.CancelPresentation();
+            var rng = new ForcedRandom(new[] { 0, 1, 2, 3, 4 });
+            var match = new TimeTheftMatch(new GameRules { InitialItemCount = 0, ItemsPerBatch = 0 }, rng, new System.Random(1));
+            match.BeginBatch(); rng.Closing = true; match.CloseAndShuffle();
+            var sources = controller.View.Clocks; var homes = sources.Select(token => token.transform.position).ToArray();
+            var parts = sources.Select(token => token.H2Presentation.Watch.GetComponentsInChildren<Renderer>(true)).ToArray();
+            var flags = parts.Select(renderers => renderers.Select(renderer => renderer.enabled).ToArray()).ToArray();
+            shuffle.Prepare(controller.View, match.LastShuffle); Assert.That(shuffle.PassCount, Is.Zero);
+            shuffle.Frame(.28f);
+            var gathered = sources[0].transform.position;
+            shuffle.Frame(.5f);
+            foreach (var token in sources) Assert.That(token.transform.position, Is.EqualTo(gathered));
+            Assert.That(Quaternion.Angle(sources[0].H2Presentation.MotionRoot.localRotation, Quaternion.identity), Is.GreaterThan(.01f), "항등 순열도 원본 yaw를 사용해 같은 위치에서 혼합한다");
+            shuffle.Frame(.72f);
+            foreach (var token in sources) Assert.That(token.transform.position, Is.EqualTo(gathered));
+            shuffle.Frame(1); shuffle.Complete();
+            for (int i = 0; i < 5; i++)
+            {
+                Assert.That(controller.View.Clocks[i], Is.SameAs(sources[i]));
+                Assert.That(controller.View.Clocks[i].transform.position, Is.EqualTo(homes[i]));
+                Assert.That(parts[i].Select(renderer => renderer.enabled), Is.EqualTo(flags[i]));
+            }
+            Assert.That(focus.IsPresentationCameraOwned, Is.False); yield return null;
         }
         [UnityTest] public IEnumerator ControllerFeedsRawTimeToAlreadyEasedSourcePasses()
         {

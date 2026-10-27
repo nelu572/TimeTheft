@@ -69,6 +69,7 @@ namespace TimeTheft
             aiScale = aiLife.transform.localScale;
             bankScale = bank.transform.localScale;
             initialized = true;
+            UseInterfaceFont();
             CreateInventoryLabel();
         }
 
@@ -148,6 +149,8 @@ namespace TimeTheft
             var inventory = match.GetInventory(Participant.Player);
             phaseLabel.text = "내 차례 · 아이템 단계 (" + inventory.Count + "개)\n아이템을 클릭해 선택하거나 시계 선택으로 진행하세요";
             ShowItemReadiness(match);
+            for (int i = 0; i < clocks.Length; i++)
+                clocks[i].SetSelectable(match.GetClock(i).Visibility == ClockVisibility.Hidden);
             RefreshInventory(match);
         }
 
@@ -173,6 +176,7 @@ namespace TimeTheft
 
         public void ShowItemFailure(ItemUseResult result)
         {
+            ShowContextNotice(ItemFailureText(result.Failure));
             inventoryNotice = "사용 실패 · 소모 없음";
             phaseLabel.text += "\n사용 거부 · " + (result.Failure == ItemUseFailure.NoTarget ? "제거 대상 없음 · 소모 안 됨" : "현재 사용 불가 · 소모 안 됨");
             RefreshItemControls();
@@ -226,6 +230,7 @@ namespace TimeTheft
 
         public void Reveal(TimeTheftMatch match, bool enteringMotion = false)
         {
+            ShowCommittedAction(match);
             SetItemContext(match, true, true);
             Controls(false);
             Inspectable(false);
@@ -376,7 +381,7 @@ namespace TimeTheft
             Controls(false);
             resultTitle.text = match.Winner == GameWinner.Player ? "당신이 살아남았습니다" : "당신의 시간이 다했습니다";
             resultDetail.text = "Time Bank 잔액 " + GameTime.Format(match.BankMinutes);
-            phaseLabel.text = resultTitle.text + "\nR 또는 전표의 다시하기";
+            phaseLabel.text = resultTitle.text + "\n전표의 다시하기를 클릭하세요";
         }
 
         public void Numbers(TimeTheftMatch match)
@@ -421,10 +426,12 @@ namespace TimeTheft
             label.text = (delta < 0 ? "−" : "+") + GameTime.Format(Math.Abs(delta));
             label.color = color;
             label.gameObject.SetActive(delta != 0);
+            label.GetComponent<Renderer>().enabled = false;
         }
 
         private void ClearDeltas()
         {
+            HideCounterDeltas();
             foreach (var label in new[] { playerDelta, aiDelta, bankDelta })
                 if (label) { label.text = ""; label.gameObject.SetActive(false); }
         }
@@ -439,7 +446,13 @@ namespace TimeTheft
             focusCamera.SuppressPointerForCurrentFrame();
             choose?.Invoke(action);
         }
-        private void Restart() => restartGame?.Invoke();
+        private void Restart()
+        {
+            if (!IsResultVisible || itemMatch == null || itemMatch.Stage != TurnStage.GameOver) return;
+            restart.SetInputEnabled(false);
+            focusCamera.SuppressPointerForCurrentFrame();
+            restartGame?.Invoke();
+        }
         public void ToggleHelp() { helpCard.SetActive(!helpCard.activeSelf); if (helpCard.activeSelf) focusCamera.ReturnToOverview(); }
         private static string ActorName(Participant participant) => participant == Participant.Player ? "나" : "상대";
         private void CreateInventoryLabel()
@@ -504,6 +517,8 @@ namespace TimeTheft
             if (restart) restart.Clicked -= Restart;
             if (inventoryLabel) Destroy(inventoryLabel.gameObject);
             DestroyItemControls();
+            DestroyMouseControls();
+            DestroyContextUi();
         }
     }
 }

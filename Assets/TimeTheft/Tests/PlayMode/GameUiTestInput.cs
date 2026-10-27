@@ -60,17 +60,16 @@ namespace TimeTheft.Tests
 
         public static void Point(InputTestFixture input, Mouse mouse, Button button)
         {
-            Assert.That(button.gameObject.activeInHierarchy && button.interactable, Is.True);
+            Assert.That(IsVisiblyInteractable(button), Is.True, DescribeButton(button));
             mouse.MakeCurrent();
             Vector2 requested = Position(button);
             input.Set(mouse.position, requested);
             Process();
-            var hits = new List<RaycastResult>();
-            EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = mouse.position.ReadValue() }, hits);
+            var hits = Raycast(mouse.position.ReadValue());
             var first = hits.FirstOrDefault(hit => hit.module is GraphicRaycaster);
             string diagnostic = DescribePointer(button, mouse, requested, hits);
             Assert.That(first.gameObject, Is.Not.Null, "실제 GraphicRaycaster가 버튼 영역을 가리킨다 / " + diagnostic);
-            Assert.That(first.gameObject.transform.IsChildOf(button.transform), Is.True, diagnostic);
+            Assert.That(first.gameObject.GetComponentInParent<Button>(), Is.SameAs(button), diagnostic);
         }
 
         public static void DisableSceneModules()
@@ -83,17 +82,46 @@ namespace TimeTheft.Tests
 
         private static string DescribePointer(Button button, Mouse mouse, Vector2 requested, List<RaycastResult> hits)
         {
+            var first = hits.FirstOrDefault(hit => hit.module is GraphicRaycaster);
+            var topButton = first.gameObject ? first.gameObject.GetComponentInParent<Button>() : null;
+            return $"frame={Time.frameCount} requested={requested} actual={mouse.position.ReadValue()} " +
+                DescribeButton(button) + $" topGraphic={first.gameObject?.name} topButton={topButton?.name} " +
+                $"selected={EventSystem.current?.currentSelectedGameObject?.name} " +
+                $"left={mouse.leftButton.isPressed} pressed={mouse.leftButton.wasPressedThisFrame} released={mouse.leftButton.wasReleasedThisFrame} " +
+                $"hits=[{string.Join(",", hits.Select(hit => hit.gameObject ? hit.gameObject.name : "null"))}]";
+        }
+
+        private static string DescribeButton(Button button)
+        {
+            if (!button) return "button=null/destroyed";
             var canvas = button.GetComponentInParent<Canvas>();
             var graphic = button.targetGraphic;
-
-            return $"frame={Time.frameCount} requested={requested} actual={mouse.position.ReadValue()} rect={ScreenRect(button)} " +
+            var groups = button.GetComponentsInParent<CanvasGroup>(true);
+            return $"rect={ScreenRect(button)} " +
                 $"screen={Screen.width}x{Screen.height} button={button.name} active={button.gameObject.activeInHierarchy} " +
-                $"interactable={button.interactable} " +
+                $"enabled={button.isActiveAndEnabled} interactable={button.interactable} effectiveInteractable={button.IsInteractable()} " +
                 $"canvas={canvas?.name} active={canvas && canvas.isActiveAndEnabled} mode={canvas?.renderMode} " +
                 $"pixelRect={canvas?.pixelRect} scale={canvas?.scaleFactor} " +
                 $"graphicDepth={graphic?.depth} raycast={graphic && graphic.raycastTarget} cull={graphic?.canvasRenderer.cull} " +
-                $"left={mouse.leftButton.isPressed} pressed={mouse.leftButton.wasPressedThisFrame} released={mouse.leftButton.wasReleasedThisFrame} " +
-                $"hits=[{string.Join(",", hits.Select(hit => hit.gameObject ? hit.gameObject.name : "null"))}]";
+                $"inheritedAlpha={(graphic ? graphic.canvasRenderer.GetInheritedAlpha() : 0)} " +
+                "groups=[" + string.Join(",", groups.Select(group => $"{group.name}(enabled={group.enabled},alpha={group.alpha}," +
+                    $"interactable={group.interactable},blocksRaycasts={group.blocksRaycasts},ignoreParentGroups={group.ignoreParentGroups})")) + "]";
+        }
+
+        private static List<RaycastResult> Raycast(Vector2 point)
+        {
+            var hits = new List<RaycastResult>();
+            if (EventSystem.current)
+                EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = point }, hits);
+            return hits;
+        }
+
+        private static bool IsVisiblyInteractable(Button button)
+        {
+            if (!button || !button.isActiveAndEnabled || !button.IsInteractable()) return false;
+            var graphic = button.targetGraphic;
+            return graphic && graphic.isActiveAndEnabled && graphic.depth >= 0 &&
+                !graphic.canvasRenderer.cull && graphic.canvasRenderer.GetInheritedAlpha() > .99f;
         }
 
         public static void Process()
@@ -107,17 +135,23 @@ namespace TimeTheft.Tests
 
         public static IEnumerator Ready(Button button)
         {
-            // Stage는 코루틴에서 먼저 열린다. 실제 표시/레이캐스트 등록이 끝난 프레임부터 누른다.
+            // Stage/자식 Button은 먼저 열릴 수 있다. 부모 CanvasGroup의 입력 잠금과 fade 완료까지 기다린다.
             float deadline = Time.realtimeSinceStartup + 2;
             while (Time.realtimeSinceStartup < deadline)
             {
                 Canvas.ForceUpdateCanvases();
-                if (button.gameObject.activeInHierarchy && button.interactable && button.targetGraphic.depth >= 0 &&
-                    !button.targetGraphic.canvasRenderer.cull) yield break;
+                if (IsVisiblyInteractable(button))
+                {
+                    // 실제 GraphicRaycaster가 CanvasGroup.blocksRaycasts/ignoreParentGroups와 가림도 판정한다.
+                    var first = Raycast(Position(button)).FirstOrDefault(hit => hit.module is GraphicRaycaster);
+                    if (first.gameObject && first.gameObject.GetComponentInParent<Button>() == button) yield break;
+                }
                 yield return null;
             }
-            Assert.Fail($"UI 표시/레이캐스트 등록 시간 초과: {button.name} active={button.gameObject.activeInHierarchy} " +
-                $"depth={button.targetGraphic.depth} cull={button.targetGraphic.canvasRenderer.cull}");
+            var mouse = Mouse.current;
+            string diagnostic = button && mouse != null
+                ? DescribePointer(button, mouse, Position(button), Raycast(Position(button))) : DescribeButton(button);
+            Assert.Fail("UI 표시/레이캐스트 등록 시간 초과: " + diagnostic);
         }
 
         public static IEnumerator Click(InputTestFixture input, Mouse mouse, Button button,
@@ -126,14 +160,41 @@ namespace TimeTheft.Tests
             yield return Ready(button);
             Point(input, mouse, button);
             yield return null;
-            input.Press(mouse.leftButton);
-            Process();
-            afterPress?.Invoke();
+            // 카메라/오브젝트를 따라가는 카드가 위 프레임의 LateUpdate에서 이동했을 수 있다.
+            yield return Ready(button);
+            Point(input, mouse, button);
+            string beforePress = DescribePointer(button, mouse, Position(button), Raycast(mouse.position.ReadValue()));
+            int submitted = 0;
+            UnityEngine.Events.UnityAction observeClick = () => submitted++;
+            button.onClick.AddListener(observeClick);
+            try
+            {
+                input.Press(mouse.leftButton);
+                Process();
+                InvokeAssertion(afterPress, "press", button, mouse, beforePress);
+                yield return null;
+                input.Release(mouse.leftButton);
+                Process();
+                Assert.That(submitted, Is.EqualTo(1), "실제 포인터 press/release가 Button.onClick을 한 번 제출한다 / beforePress=" +
+                    beforePress + " / afterRelease=" + DescribePointer(button, mouse, mouse.position.ReadValue(), Raycast(mouse.position.ReadValue())));
+                InvokeAssertion(afterRelease, "release", button, mouse, beforePress);
+            }
+            finally
+            {
+                if (button) button.onClick.RemoveListener(observeClick);
+            }
             yield return null;
-            input.Release(mouse.leftButton);
-            Process();
-            afterRelease?.Invoke();
-            yield return null;
+        }
+
+        private static void InvokeAssertion(Action assertion, string phase, Button button, Mouse mouse, string beforePress)
+        {
+            try { assertion?.Invoke(); }
+            catch (AssertionException)
+            {
+                TestContext.WriteLine($"UI {phase} assertion / beforePress={beforePress} / current=" +
+                    DescribePointer(button, mouse, mouse.position.ReadValue(), Raycast(mouse.position.ReadValue())));
+                throw;
+            }
         }
     }
 }
