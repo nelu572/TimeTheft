@@ -1,0 +1,5 @@
+{
+  "name": "TimeTheft.TitleScreen",
+  "rootNamespace": "TimeTheft.TitleScreen",
+  "references": ["Unity.TextMeshPro", "Unity.ugui", "Unity.InputSystem"]
+}
