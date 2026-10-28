@@ -155,7 +155,7 @@ namespace TimeTheft
         private Vector3 BoundaryTarget(Use use, Transform targetSide)
         {
             var point = targetSide.position; point.x = 0;
-            if (use.Kind == ItemKind.RubberDuck) point = new Vector3(use.Owner == Participant.Player ? 0 : 2.7f, point.y, use.Owner == Participant.Player ? 2.5f : -2.5f);
+            if (use.Kind == ItemKind.RubberDuck) point = new Vector3(0, point.y, use.Owner == Participant.Player ? 2.5f : -2.5f);
             if (use.Kind == ItemKind.Handcuffs && use.Owner == Participant.Player && opponent && VisibleBounds(opponent.gameObject, out var bounds))
             { point.x = bounds.center.x; point.z = bounds.min.z - BodyBounds(use.Item).extents.z - .12f; }
             else if (use.Kind == ItemKind.Handcuffs) point.z -= .35f;

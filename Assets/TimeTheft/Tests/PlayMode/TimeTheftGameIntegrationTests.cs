@@ -95,7 +95,8 @@ namespace TimeTheft.Tests
             {
                 var match = controller.Match;
                 if (match.Batch != lastBatch) { batches++; lastBatch = match.Batch; }
-                if (match.Stage == TurnStage.AwaitingClock && match.ActiveParticipant == Participant.Player)
+                if (match.Stage == TurnStage.AwaitingClock && match.ActiveParticipant == Participant.Player &&
+                    !controller.IsFlowBlocked && !controller.IsPresentingItem && !controller.IsPresentingClock)
                 {
                     bool ration = acted++ == 0;
                     sawRation |= ration; sawCollect |= !ration;
@@ -108,7 +109,8 @@ namespace TimeTheft.Tests
                 if (controller.View.IsCountingTime)
                 {
                     sawTransfer = true;
-                    Assert.That(Read(controller.View.PlayerLife) + Read(controller.View.AiLife) + Read(controller.View.Bank), Is.EqualTo(3600));
+                    Assert.That(Read(controller.View.PlayerLife) + Read(controller.View.AiLife) + Read(controller.View.Bank),
+                        Is.EqualTo(settings.Rules.InitialLifeHours * 2 * GameTime.MinutesPerHour));
                     Assert.That(Read(controller.View.Bank), Is.GreaterThanOrEqualTo(0));
                 }
                 else if (match.Stage == TurnStage.AwaitingClock || match.Stage == TurnStage.BatchPreview || controller.View.IsResultVisible) AssertNumbers();
@@ -124,7 +126,7 @@ namespace TimeTheft.Tests
             Assert.That(controller.Match.Stage, Is.EqualTo(TurnStage.BatchPreview));
             Assert.That(controller.View.IsResultVisible, Is.False);
             Assert.That(controller.View.Clocks[0].GetInstanceID(), Is.EqualTo(initialClockId));
-            Assert.That(controller.Match.BankMinutes, Is.EqualTo(1200));
+            Assert.That(controller.Match.BankMinutes, Is.EqualTo(TimeTheftMatch.InitialContributionMinutes * 2));
             AssertNumbers();
         }
 
@@ -1367,13 +1369,15 @@ namespace TimeTheft.Tests
                 var match = controller.Match;
                 if (controller.View.LastItemUse.HasValue && controller.View.LastItemUse.Value.Actor == Participant.Ai)
                     sawAiUse = true;
-                if (match.ActiveParticipant == Participant.Player && match.Stage == TurnStage.AwaitingItems) controller.EndItemPhase();
-                if (match.ActiveParticipant == Participant.Player && match.Stage == TurnStage.AwaitingClock)
+                bool ready = !controller.IsFlowBlocked && !controller.IsPresentingItem && !controller.IsPresentingClock;
+                if (ready && match.ActiveParticipant == Participant.Player && match.Stage == TurnStage.AwaitingItems) controller.EndItemPhase();
+                if (ready && match.ActiveParticipant == Participant.Player && match.Stage == TurnStage.AwaitingClock)
                 {
                     yield return ClickClock(match.GetAvailableClockIndices().Last());
                     yield return ChooseAction(TimeAction.Collect);
                 }
-                Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+                Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes,
+                    Is.EqualTo(settings.Rules.InitialLifeHours * 2 * GameTime.MinutesPerHour));
                 yield return null;
             }
             Assert.That(controller.View.IsResultVisible, Is.True);
