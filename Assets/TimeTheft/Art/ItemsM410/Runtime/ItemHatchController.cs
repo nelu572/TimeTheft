@@ -205,6 +205,9 @@ namespace TimeTheft.ItemPresentation
             {
                 float time = Mathf.Min(elapsed, duration), frame = 1 + time * 30;
                 module.Clip.SampleAnimation(module.Model, time);
+                // 원본 트레이의 앞뒤 이동은 제거하고 최종 해치 바로 아래에서 같은 높이 곡선으로 상승한다.
+                if (module.Tray)
+                    module.Tray.position = new Vector3(finalTray.x, module.Tray.position.y, finalTray.z);
                 var trayDelta = module.Tray ? module.Tray.position - finalTray : Vector3.zero;
                 // 비활성 공급물도 먼저 실제 트레이의 원본 자세에 둔다. 활성화 콜백에 완성 보유 자세를 노출하지 않는다.
                 foreach (var value in newState)

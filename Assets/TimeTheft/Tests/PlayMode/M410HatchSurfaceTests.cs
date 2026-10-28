@@ -110,6 +110,65 @@ namespace TimeTheft.Tests
             Assert.That(surface.HasOpening, Is.False);
         }
 
+        [UnityTest] public IEnumerator PlayerBatchSupplyRisesVertically() => NativeSupply(HatchOperation.Replace, -1.6f);
+        [UnityTest] public IEnumerator AiBatchSupplyRisesVertically() => NativeSupply(HatchOperation.Replace, 1.6f);
+        [UnityTest] public IEnumerator PlayerAdditionalSupplyRisesVertically() => NativeSupply(HatchOperation.AddGive, -1.6f);
+        [UnityTest] public IEnumerator AiAdditionalSupplyRisesVertically() => NativeSupply(HatchOperation.AddGive, 1.6f);
+
+        private IEnumerator NativeSupply(HatchOperation operation, float side)
+        {
+            BuildSurface(out var surface, out var filter, out _, out var original);
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/TimeTheft/Art/ItemsM410/Runtime/Prefabs/ItemHatchRuntime.prefab");
+            var instance = Object.Instantiate(prefab, root.transform);
+            var controller = instance.GetComponent<ItemHatchController>();
+            controller.Surface = surface;
+            controller.PlaybackSpeed = 8;
+            var module = System.Array.Find(controller.Modules, value => value.Operation == operation);
+            var location = Child("Supply location"); location.position = new Vector3(0, 0, side);
+            var item = Cube("Supplied item", new Vector3(0, .1f, side));
+            var finalPosition = item.transform.position;
+            bool completed = false, success = false, sawClosedFloor = false;
+            controller.Presented += (id, signal) => {
+                if (signal == HatchPresentationEvent.FloorClear)
+                {
+                    sawClosedFloor = true;
+                    Assert.That(item.transform.position.y, Is.LessThan(finalPosition.y - .1f), "공급물은 해치 바로 아래에서 대기한다");
+                }
+            };
+            var request = new ItemHatchRequest("vertical supply", operation, location, null, new[] { item });
+            request.Finished = value => { completed = true; success = value; };
+            Assert.That(controller.Enqueue(request), Is.True);
+            var trayRenderer = module.Tray.GetComponentInChildren<Renderer>();
+            var trayStart = trayRenderer.bounds.center;
+            float minimumItemY = item.transform.position.y, minimumTrayY = trayStart.y, maximumTrayY = trayStart.y;
+            int samples = 0;
+            float deadline = Time.realtimeSinceStartup + 12;
+            while (!completed && Time.realtimeSinceStartup < deadline)
+            {
+                var position = item.transform.position;
+                var trayPosition = trayRenderer.bounds.center;
+                Assert.That(position.x, Is.EqualTo(finalPosition.x).Within(.001f));
+                Assert.That(position.z, Is.EqualTo(finalPosition.z).Within(.001f));
+                Assert.That(trayPosition.x, Is.EqualTo(trayStart.x).Within(.001f));
+                Assert.That(trayPosition.z, Is.EqualTo(trayStart.z).Within(.001f));
+                minimumItemY = Mathf.Min(minimumItemY, position.y);
+                minimumTrayY = Mathf.Min(minimumTrayY, trayPosition.y);
+                maximumTrayY = Mathf.Max(maximumTrayY, trayPosition.y);
+                samples++;
+                yield return null;
+            }
+            Assert.That(completed && success, Is.True, controller.LastError);
+            Assert.That(samples, Is.GreaterThan(3));
+            Assert.That(sawClosedFloor, Is.True);
+            Assert.That(minimumItemY, Is.LessThan(finalPosition.y - .1f));
+            Assert.That(maximumTrayY - minimumTrayY, Is.GreaterThan(.1f));
+            Assert.That(Vector3.Distance(item.transform.position, finalPosition), Is.LessThan(.001f), "기존 최종 배치를 유지한다");
+            Assert.That(item.activeSelf, Is.True);
+            Assert.That(surface.HasOpening, Is.False);
+            Assert.That(filter.sharedMesh, Is.SameAs(original), "기존 해치 폐쇄와 상판 복원을 유지한다");
+        }
+
         private void BuildSurface(out ItemHatchSurface surface, out MeshFilter filter, out MeshCollider collider, out Mesh original)
         {
             root = new GameObject("Hatch integration test");

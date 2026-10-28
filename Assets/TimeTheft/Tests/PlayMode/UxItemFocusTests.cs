@@ -63,8 +63,8 @@ namespace TimeTheft.Tests
 
         [UnityTest] public IEnumerator PlayerKeyUsesItsTipOnTheCrownAboveTheTable() => KeyContact(Participant.Player);
         [UnityTest] public IEnumerator AiKeyUsesItsTipOnTheCrownAboveTheTable() => KeyContact(Participant.Ai);
-        [UnityTest] public IEnumerator PlayerDuckFacesThePlayerFromTheOpponentEdge() => DuckPose(Participant.Player);
-        [UnityTest] public IEnumerator AiDuckFacesTheOpponentFromTheOpponentEdge() => DuckPose(Participant.Ai);
+        [UnityTest] public IEnumerator PlayerDuckKeepsItsDirectionAfterSupplyAndUse() => DuckPose(Participant.Player);
+        [UnityTest] public IEnumerator AiDuckFacesThePlayerAfterSupplyAndUse() => DuckPose(Participant.Ai);
 
         private IEnumerator KeyContact(Participant actor)
         {
@@ -133,7 +133,7 @@ namespace TimeTheft.Tests
                 TimeTheftItemTestSetup.Give(game.Match, Participant.Player, ItemKind.SpareKey);
             }
             ItemPresentationController model = null;
-            bool requested = false;
+            bool requested = false, sawInventoryPose = false;
             float deadline = Time.realtimeSinceStartup + 25;
             while (Time.realtimeSinceStartup < deadline)
             {
@@ -144,6 +144,11 @@ namespace TimeTheft.Tests
                         .FirstOrDefault(value => value.Kind == ItemKind.RubberDuck);
                     if (item) model = item.ModelPresentation;
                 }
+                if (model && model.Anchors == null && model.Visual.activeInHierarchy)
+                {
+                    AssertDuckFacing(model, actor);
+                    sawInventoryPose = true;
+                }
                 if (actor == Participant.Player && !requested && Ready() && PlayerItemReady(id))
                 {
                     game.UseItem(id);
@@ -151,11 +156,14 @@ namespace TimeTheft.Tests
                 }
                 if (model && model.Anchors != null && model.State == ItemPresentationState.Holding)
                 {
+                    Assert.That(sawInventoryPose, Is.True, "해치 등장 중 보유 방향을 관찰한다");
+                    AssertDuckFacing(model, actor);
                     var target = model.Anchors.TargetItem;
-                    Assert.That(target.position.x, Is.EqualTo(actor == Participant.Player ? 0 : 2.7f).Within(.01f));
+                    Assert.That(target.position.x, Is.EqualTo(0).Within(.01f));
                     Assert.That(target.position.z, Is.EqualTo(actor == Participant.Player ? 2.5f : -2.5f).Within(.01f), "양측 러버덕은 시계 뒤쪽 상대 영역 중앙에 놓인다");
                     Assert.That(Quaternion.Angle(model.MotionRoot.rotation, target.rotation), Is.LessThan(1), "Deploy가 명시한 사용 주체별 목표 회전을 반영한다");
                     var bounds = VisibleBounds(model.Visual);
+                    Assert.That(bounds.center.x, Is.EqualTo(0).Within(.01f), "실제 모델이 받는 쪽 정면 중앙에 안착한다");
                     Assert.That(bounds.min.y, Is.EqualTo(TableHeight()).Within(.025f));
                     Assert.That(actor == Participant.Player ? bounds.min.z : -bounds.max.z, Is.GreaterThan(1.5f), "중앙 5개 시계 영역과 분리된다");
                     Assert.That(model.Anchors.Opponent, Is.EqualTo(actor == Participant.Ai));
@@ -164,6 +172,15 @@ namespace TimeTheft.Tests
                 yield return null;
             }
             Assert.Fail(actor + " 러버덕 실제 사용/배치가 제한 시간 내 끝나지 않았다 / " + Diagnostic(id, model) + ", requestedUse=" + requested);
+        }
+
+        private static void AssertDuckFacing(ItemPresentationController model, Participant actor)
+        {
+            var renderers = model.Visual.GetComponentsInChildren<Renderer>();
+            var bill = renderers.Single(value => value.name.Contains("Bill"));
+            var body = renderers.Single(value => value.name.Contains("Body_Head"));
+            var facing = Vector3.ProjectOnPlane(bill.bounds.center - body.bounds.center, Vector3.up).normalized;
+            Assert.That(Vector3.Dot(facing, actor == Participant.Ai ? Vector3.back : Vector3.forward), Is.GreaterThan(.9f), "AI 부리는 플레이어를 향하고 플레이어 부리는 기존 방향을 유지한다");
         }
 
         private void Accelerate()

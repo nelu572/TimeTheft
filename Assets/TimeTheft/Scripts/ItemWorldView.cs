@@ -106,6 +106,8 @@ namespace TimeTheft
             visual.localScale = visualScale;
             modelPlacement.localPosition = Vector3.zero;
             modelPlacement.localRotation = Quaternion.Euler(profile.InventoryEuler);
+            if (Owner == Participant.Ai && profile.Item == PresentedItem.RubberDuck)
+                modelPlacement.localRotation = Quaternion.Euler(0, 180, 0) * modelPlacement.localRotation;
             modelPlacement.localScale = Vector3.one;
             heldSourceSeconds = (acquire.LastFrame - 1) / 30f;
             var clip = Owner == Participant.Ai && profile.OpponentClip ? profile.OpponentClip : profile.Clip;
