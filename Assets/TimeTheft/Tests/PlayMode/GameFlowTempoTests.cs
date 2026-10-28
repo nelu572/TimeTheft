@@ -116,6 +116,7 @@ namespace TimeTheft.Tests
             while (controller.Match.Batch < 2 && Time.realtimeSinceStartup < deadline)
             {
                 var notice = controller.FlowNotice;
+                Assert.That(controller.View.PublicActionLabel.text, Is.Empty, "기존 상대 행동 문구는 표시하지 않는다");
                 if (notice.IsVisible)
                 {
                     sawAiTurn |= notice.Message == "상대의 차례";

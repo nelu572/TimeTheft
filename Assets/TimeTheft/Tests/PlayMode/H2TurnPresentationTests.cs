@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using System;
 using System.Collections;
 using System.Linq;
@@ -208,7 +208,7 @@ namespace TimeTheft.Tests
                 yield return null;
             }
             Assert.That(opponentSamples, Is.GreaterThan(0)); Assert.That(sawOpponentOpen, Is.True, "자기 영역에서 상대 방향으로 실제 덮개를 연다");
-            Assert.That(sawCommittedCue, Is.True);
+            Assert.That(sawCommittedCue, Is.False, "기존 상대 행동 문구를 중앙 안내와 중복하지 않는다");
             Assert.That(turn.Phase, Is.EqualTo(H2TurnPresentation.TurnPhase.ResultPose));
             Assert.That(turn.IsResultPublic, Is.True);
             AssertOverviewCamera();
