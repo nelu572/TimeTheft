@@ -104,6 +104,7 @@ namespace TimeTheft
             noticeText.alignment = TextAlignmentOptions.Center;
             noticeCard.GetComponent<UiIndexGraphic>().raycastTarget = false;
             InitializeClockContext();
+            InitializeClockHover();
             InitializeCounterDeltas();
             BuildHelpCard();
             InitializeUxCues();
@@ -292,6 +293,7 @@ namespace TimeTheft
             Fade(actionGroup, actionVisible, ref actionWasVisible);
             actionLeader.gameObject.SetActive(actionVisible);
             RefreshClockContext();
+            RefreshClockHover();
             RefreshCounterDeltas();
             noticeCard.anchoredPosition = new Vector2(0, -uiRoot.rect.height * .5f + 72);
             bool noticeVisible = Time.unscaledTime < noticeUntil && !IsHelpVisible && itemMatch.Stage != TurnStage.GameOver;

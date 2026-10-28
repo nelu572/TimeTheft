@@ -11,7 +11,6 @@ namespace TimeTheft
     public sealed partial class TimeTheftGameView
     {
         private TextMeshProUGUI turnCue, blockedCue;
-        private readonly Image[] readyMarks = new Image[TimeTheftMatch.ClocksPerBatch];
         private TimeTheftMatch cueMatch;
         private int cueTurn = -1;
         private Participant cueActor;
@@ -36,13 +35,7 @@ namespace TimeTheft
             turnCue.alignment = TextAlignmentOptions.Center; OutlineText(turnCue);
             blockedCue = Label(uiRoot, "Item Blocked Cue", 28, new Color(.83f, .40f, .34f), Vector2.zero, new Vector2(1000, 50));
             blockedCue.alignment = TextAlignmentOptions.Center; OutlineText(blockedCue);
-            for (int i = 0; i < readyMarks.Length; i++)
-            {
-                var go = new GameObject("Clock " + i + " Ready", typeof(RectTransform), typeof(Image));
-                go.transform.SetParent(uiRoot, false);
-                readyMarks[i] = go.GetComponent<Image>(); readyMarks[i].raycastTarget = false;
-                go.SetActive(false);
-            }
+
         }
         public void ShowItemBlockedFeedback()
         {
@@ -77,21 +70,6 @@ namespace TimeTheft
             rect.anchoredPosition = new Vector2(0, 30);
             color = blockedCue.color; color.a = !IsHelpVisible && !IsResultVisible && itemMatch.IsItemUseBlocked(Participant.Player)
                 ? Mathf.Clamp01((blockedUntil - Time.unscaledTime) / .3f) : 0; blockedCue.color = color;
-            for (int i = 0; i < readyMarks.Length; i++)
-            {
-                bool show = !busy && choosing && itemMatch.ActiveParticipant == Participant.Player && (itemMatch.CanSelectClock(Participant.Player, i) || itemMatch.Stage == TurnStage.AwaitingItems && itemMatch.GetClock(i).Visibility == ClockVisibility.Hidden);
-                Vector2 min, max;
-                show = show && ClockScreenBounds(i, out min, out max);
-                if (show)
-                {
-                    ClockScreenBounds(i, out min, out max);
-                    Vector2 local; RectTransformUtility.ScreenPointToLocalPointInRectangle(uiRoot, new Vector2((min.x+max.x)*.5f,min.y),null,out local);
-                    var mark = readyMarks[i].rectTransform; mark.anchorMin=mark.anchorMax=mark.pivot=new Vector2(.5f,.5f);
-                    mark.anchoredPosition = local + Vector2.down * 12; mark.sizeDelta = new Vector2(52, 3);
-                    readyMarks[i].color = new Color(UiBrass.r, UiBrass.g, UiBrass.b, .48f + .14f*Mathf.Sin(Time.unscaledTime*2));
-                }
-                readyMarks[i].gameObject.SetActive(show);
-            }
             if (!busy && choosing && itemMatch.ActiveParticipant == Participant.Player && itemMatch.IsItemUseBlocked(Participant.Player) &&
                 Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
