@@ -189,13 +189,17 @@ namespace TimeTheft
             Inspectable(true);
             ApplyClocks(match);
             phaseLabel.text = match.ActiveParticipant == Participant.Player
-                ? "여벌 열쇠 · 나만 확인\n이 시계 유지 / 다른 미사용 시계 클릭으로 1회 재선택"
+                ? "여벌 열쇠 · 확인 완료\n사용할 닫힌 시계를 직접 클릭하세요"
                 : "상대 · 여벌 열쇠 확인 중";
             ShowPlayerClockKnowledge(match);
+            if (match.ActiveParticipant == Participant.Player)
+            {
+                ShowContextNotice("확인 완료 · 사용할 시계를 클릭하세요");
+            }
             for (int i = 0; i < clocks.Length; i++)
-                clocks[i].SetSelectable(match.ActiveParticipant == Participant.Player && i != match.CurrentClock
+                clocks[i].SetSelectable(match.ActiveParticipant == Participant.Player
                     && match.GetClock(i).Visibility == ClockVisibility.Hidden);
-            clocks[match.CurrentClock].SetSelected(true);
+            clocks[match.CurrentClock].SetSelected(false);
             RefreshInventory(match);
         }
 
@@ -210,6 +214,7 @@ namespace TimeTheft
             ShowPlayerClockKnowledge(match);
             ApplyClocks(match);
             clocks[match.CurrentClock].SetSelected(true);
+            clocks[match.CurrentClock].SetDecisionClickable(match.ActiveParticipant == Participant.Player);
             RefreshInventory(match);
         }
 
@@ -296,7 +301,7 @@ namespace TimeTheft
             foreach (var effect in match.GetPendingItemEffects(match.ActiveParticipant))
             {
                 if (effect.Source.IsFoundationTest) continue;
-                if (effect.Source.Kind == ItemKind.RubberDuck) phaseLabel.text += "\n고무 오리 대기 · 상대의 다음 실제 행동에서 아이템 봉쇄";
+                if (effect.Source.Kind == ItemKind.RubberDuck) phaseLabel.text += "\n러버덕 대기 · 상대의 다음 실제 행동에서 아이템 봉쇄";
                 if (effect.Source.Kind == ItemKind.Handcuffs) phaseLabel.text += "\n수갑 대기 · 상대의 다음 차례 생략";
             }
             ShowTurnItemEvents(match);
@@ -315,8 +320,8 @@ namespace TimeTheft
                 phaseLabel.text += itemEvent.Kind == ItemTurnEventKind.TurnSkipped
                     ? "\n수갑 · " + ActorName(itemEvent.Target) + " 차례 생략 · 시계 미사용 / 해제"
                     : itemEvent.Kind == ItemTurnEventKind.ItemsBlocked
-                        ? "\n고무 오리 · " + ActorName(itemEvent.Target) + " 아이템 사용 봉쇄"
-                        : itemEvent.Kind == ItemTurnEventKind.RestrictionEnded ? "\n고무 오리 · 아이템 봉쇄 종료"
+                        ? "\n러버덕 · " + ActorName(itemEvent.Target) + " 아이템 사용 봉쇄"
+                        : itemEvent.Kind == ItemTurnEventKind.RestrictionEnded ? "\n러버덕 · 아이템 봉쇄 종료"
                         : "\n" + ItemName(itemEvent.Source.Kind) + " · 대기 종료 (게임 종료)";
         }
 

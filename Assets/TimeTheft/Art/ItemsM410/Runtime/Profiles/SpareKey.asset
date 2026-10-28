@@ -1,0 +1,59 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be6a5949ce026e244bc4a8229fb26b57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Item: 0
+  Clip: {fileID: -1845748146439516738, guid: 61777b42f189a044189497034c13aae8, type: 3}
+  OpponentClip: {fileID: 0}
+  RootPath: TT_Key_Root
+  ContactPath: TT_Key_Root/TT_Key_M45_Key__KEY_MotionRoot/TT_Key_M45_Key__KEY_RollAxis_X/TT_Key_M45_Key__KEY_Contact_Tip
+  DeployOnUse: 0
+  ActivateOnUse: 0
+  InventoryWidth: 0.9
+  InventoryEuler: {x: 0, y: 0, z: 0}
+  Segments:
+  - Phase: 0
+    FirstFrame: 1
+    LastFrame: 26
+    Destination: 1
+    DurationSeconds: 0
+  - Phase: 1
+    FirstFrame: 27
+    LastFrame: 39
+    Destination: 1
+    DurationSeconds: 0
+  - Phase: 2
+    FirstFrame: 50
+    LastFrame: 74
+    Destination: 3
+    DurationSeconds: 0
+  - Phase: 3
+    FirstFrame: 75
+    LastFrame: 96
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 4
+    FirstFrame: 97
+    LastFrame: 114
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 5
+    FirstFrame: 115
+    LastFrame: 124
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 6
+    FirstFrame: 125
+    LastFrame: 151
+    Destination: 6
+    DurationSeconds: 0

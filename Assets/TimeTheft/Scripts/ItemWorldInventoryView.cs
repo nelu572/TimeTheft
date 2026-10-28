@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -13,6 +13,9 @@ namespace TimeTheft
         [SerializeField, Min(.1f)] private float spacing = 1.25f;
         [SerializeField, Min(.1f)] private float playerScale = 1;
         [SerializeField, Min(.1f)] private float opponentScale = 1.15f;
+        [SerializeField] private GameObject[] modelPrefabs = new GameObject[6];
+        [SerializeField] private GameObject[] cutProxies = new GameObject[6];
+        private ItemGamePresentation modelUses;
         private readonly List<ItemWorldView> playerItems = new List<ItemWorldView>();
         private readonly List<ItemWorldView> opponentItems = new List<ItemWorldView>();
         private readonly List<ItemWorldView> retiringItems = new List<ItemWorldView>();
@@ -27,6 +30,15 @@ namespace TimeTheft
         public ItemWorldView ItemPrefab => itemPrefab;
         public Transform PlayerAnchor => playerAnchor;
         public Transform OpponentAnchor => opponentAnchor;
+        public ItemGamePresentation ModelUses => modelUses;
+        public GameObject CutProxy(ItemKind kind) => cutProxies != null && (int)kind < cutProxies.Length ? cutProxies[(int)kind] : null;
+
+        public void BindModels(TimeTheftGameView view)
+        {
+            modelUses = GetComponent<ItemGamePresentation>();
+            if (!modelUses) modelUses = gameObject.AddComponent<ItemGamePresentation>();
+            modelUses.Initialize(this, view);
+        }
 
         public void Initialize(Action<int> selectItem)
         {
@@ -85,6 +97,7 @@ namespace TimeTheft
         public void ShowUse(ItemUseResult result)
         {
             if (!result.Succeeded) return;
+            if (modelUses && modelUses.Play(result)) return;
             if (result.Actor == Participant.Player) RemovePlayer(result.ItemId, false);
             else RemoveOpponent(result.Effect.Value.Source.Kind, false);
             if (!result.RemovedItem.HasValue) return;
@@ -110,6 +123,7 @@ namespace TimeTheft
             var item = list[index];
             list.RemoveAt(index);
             if (!item) return;
+            if (!cut && modelUses && modelUses.QueueRetire(item)) return;
             item.BeginRemoval(cut);
             retiringItems.Add(item);
         }
@@ -120,22 +134,58 @@ namespace TimeTheft
             return null;
         }
 
+        internal ItemWorldView TakeModel(Participant owner, int id, ItemKind kind)
+        {
+            var list = owner == Participant.Player ? playerItems : opponentItems;
+            int index = list.FindIndex(item => owner == Participant.Player ? item.ItemId == id : item.Kind == kind);
+            if (index < 0 || !list[index].ModelPresentation) return null;
+            var item = list[index]; list.RemoveAt(index);
+            return item;
+        }
+
         private ItemWorldView Create(Transform anchor, Participant owner, int? id, ItemKind? kind, float scale)
         {
             var item = Instantiate(itemPrefab, anchor, false);
             item.name = owner == Participant.Player ? "Item " + id : "Opponent Item";
             item.transform.localScale = Vector3.one * scale;
+            if (kind.HasValue && modelPrefabs != null && (int)kind.Value < modelPrefabs.Length && modelPrefabs[(int)kind.Value])
+                item.AttachModel(modelPrefabs[(int)kind.Value]);
             if (labelFont)
                 foreach (var text in item.GetComponentsInChildren<TMPro.TMP_Text>(true))
                 { text.font = labelFont; text.fontSharedMaterial = labelFont.material; }
             item.Initialize(owner, id, kind, select);
+            if (modelUses) modelUses.QueueAcquire(item);
             return item;
         }
 
         private void Layout(List<ItemWorldView> items)
         {
+            if (items.Count > 0 && items.Exists(item => item.ModelPresentation))
+            {
+                float cursor = 0, mean = 0;
+                var positions = new float[items.Count];
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var box = items[i].GetComponent<BoxCollider>();
+                    float width = box ? box.size.x * Mathf.Abs(items[i].transform.localScale.x) : spacing;
+                    positions[i] = cursor + width * .5f; mean += positions[i]; cursor += width + .18f;
+                }
+                mean /= items.Count;
+                for (int i = 0; i < items.Count; i++)
+                    items[i].transform.localPosition = ClearHatchOpening(items[i], Vector3.right * (positions[i] - mean));
+                return;
+            }
             for (int i = 0; i < items.Count; i++)
                 items[i].transform.localPosition = Vector3.right * ((i - (items.Count - 1) * .5f) * spacing);
+        }
+
+        private Vector3 ClearHatchOpening(ItemWorldView item, Vector3 localPosition)
+        {
+            if (!modelUses || !modelUses.Hatch) return localPosition;
+            // 원본 6.4m Batch 트레이를 중심으로 상대 간격을 유지한다. H2 회수구는 오른쪽에 보존한다.
+            var parent = item.transform.parent;
+            var center = parent.position; center.x = 0;
+            return localPosition + parent.InverseTransformPoint(center);
         }
 
         public void SetVisible(bool visible)
@@ -146,6 +196,7 @@ namespace TimeTheft
 
         public void ResetItems()
         {
+            if (modelUses) modelUses.ResetAll();
             Clear(playerItems);
             Clear(opponentItems);
             Clear(retiringItems);

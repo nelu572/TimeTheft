@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
@@ -15,6 +15,9 @@ namespace TimeTheft
         private TextMeshProUGUI publicActionLabel, publicTransferLabel;
         private float publicActionUntil;
         private string committedActionCue = "";
+        private int privatePeekIndex = -1;
+        private Participant privatePeekOwner;
+        public void ShowPrivateClockPeek(int index, Participant owner) { privatePeekIndex = index; privatePeekOwner = owner; }
         public IReadOnlyList<TextMeshProUGUI> ClockValueLabels => System.Array.AsReadOnly(clockValues);
         public TextMeshProUGUI PublicActionLabel => publicActionLabel;
         public TextMeshProUGUI PublicTransferLabel => publicTransferLabel;
@@ -42,17 +45,19 @@ namespace TimeTheft
             cueGroup.alpha = 1; cueGroup.blocksRaycasts = false;
             publicActionCard.GetComponent<UiIndexGraphic>().raycastTarget = false;
             publicActionCard.GetComponent<UiIndexGraphic>().enabled = false;
-            publicActionLabel = Label(publicActionCard, "Committed Action", 27, UiBrass, new Vector2(20, -18), new Vector2(310, 38));
+            publicActionLabel = Label(publicActionCard, "Committed Action", 36, UiBrass, new Vector2(20, -18), new Vector2(420, 54));
             publicTransferLabel = Label(publicActionCard, "Actual Transfers", 23, UiInk, new Vector2(20, -64), new Vector2(310, 88));
             OutlineText(publicActionLabel);
             publicTransferLabel.gameObject.SetActive(false);
             publicActionCard.gameObject.SetActive(false);
         }
 
+        public void ShowOpponentCommittedAction(TimeTheftMatch match) => ShowCommittedAction(match);
+
         private void ShowCommittedAction(TimeTheftMatch match)
         {
             committedActionCue = match.ActiveParticipant == Participant.Ai ? "상대 · " + ActionName(match.Action) : "";
-            publicActionUntil = Time.unscaledTime + 1.1f;
+            publicActionUntil = Time.unscaledTime + 2.8f;
         }
 
         private void RefreshClockContext()
@@ -65,6 +70,7 @@ namespace TimeTheft
                 motion.Phase == H2TurnPresentation.TurnPhase.Closed || motion.Phase == H2TurnPresentation.TurnPhase.Returning);
             bool preview = itemMatch.Stage == TurnStage.BatchPreview;
             int selected = itemMatch.CurrentClock;
+            if (itemMatch.Stage != TurnStage.AwaitingKeyDecision) privatePeekIndex = -1;
             for (int i = 0; i < clocks.Length; i++)
             {
                 if (dialOwners[i] != clocks[i]) FindClockDial(i);
@@ -77,7 +83,17 @@ namespace TimeTheft
                     (!motion || !motion.IsOpponentTurn || motion.IsResultPublic) && clock.Face.HasValue && open &&
                     (preview || i == selected);
                 clockValues[i].text = show ? clock.Face.Value.Hours.ToString("00") + ":00" : "";
-                if (show)
+                bool privatePeek = !IsHelpVisible && !IsResultVisible && itemMatch.Stage == TurnStage.AwaitingKeyDecision && privatePeekIndex == i && selected == i;
+                if (privatePeek)
+                {
+                    // 상대의 개인 지식을 조회하지 않는다. AI는 실제 값/색상 대신 물음표만 쓴다.
+                    var known = privatePeekOwner == Participant.Player ? itemMatch.GetPrivateClock(Participant.Player, i) : (ClockFace?)null;
+                    clockValues[i].text = known.HasValue ? known.Value.Hours.ToString("00") + ":00" : "?";
+                    clockValues[i].color = known.HasValue && known.Value.Kind == ClockKind.Red ? new Color(.79f, .43f, .40f) : UiInk;
+                    clockValueCards[i].GetComponent<UiIndexGraphic>().Accent = clockValues[i].color;
+                    show = PlacePublicValue(i);
+                }
+                else if (show)
                 {
                     clockValues[i].color = clock.Face.Value.Kind == ClockKind.Red ? new Color(.79f, .43f, .40f) : UiInk;
                     clockValueCards[i].GetComponent<UiIndexGraphic>().Accent = clockValues[i].color;
@@ -94,7 +110,7 @@ namespace TimeTheft
             publicTransferLabel.gameObject.SetActive(false);
             publicActionCard.anchorMin = publicActionCard.anchorMax = publicActionCard.pivot = new Vector2(.5f, 1);
             publicActionCard.anchoredPosition = new Vector2(0, -44);
-            publicActionCard.sizeDelta = new Vector2(350, 60);
+            publicActionCard.sizeDelta = new Vector2(460, 78);
             publicActionCard.gameObject.SetActive(showAction);
         }
 

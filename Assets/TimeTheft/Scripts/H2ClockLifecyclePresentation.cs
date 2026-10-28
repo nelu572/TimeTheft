@@ -142,6 +142,7 @@ namespace TimeTheft
             if (id != generation) yield break;
             SampleMove(model, clip, 1, start, target, rotation, sourceStart, sourceEnd, sourceRotation);
             camera.transform.SetPositionAndRotation(focus.OverviewPosition, focus.OverviewRotation);
+            KeepInsideAperture(root, DropBounds());
             var dropStart = root.position; var dropRotation = root.localRotation;
             model.SampleBatchClip(dropClip, 0); var dropSource = root.localPosition; var dropSourceRotation = root.localRotation;
             root.position = dropStart; root.localRotation = dropRotation;
@@ -186,7 +187,22 @@ namespace TimeTheft
             var bounds = dropRenderers[0].bounds;
             foreach (var part in dropRenderers) bounds.Encapsulate(part.bounds);
             if (bounds.min.y < hatch.FloorHeight) root.position += Vector3.up * (hatch.FloorHeight - bounds.min.y);
+            if (bounds.min.y <= hatch.Anchor.position.y + .12f && bounds.max.y >= hatch.Anchor.position.y)
+                KeepInsideAperture(root, bounds);
             hatch.SampleCycle(u);
+        }
+        private Bounds DropBounds()
+        {
+            var bounds = dropRenderers[0].bounds;
+            foreach (var part in dropRenderers) bounds.Encapsulate(part.bounds);
+            return bounds;
+        }
+        private void KeepInsideAperture(Transform root, Bounds bounds)
+        {
+            var center = hatch.Anchor.position; var half = hatch.ClearApertureSize * .5f;
+            float x = Mathf.Max(0, center.x - half.x - bounds.min.x) + Mathf.Min(0, center.x + half.x - bounds.max.x);
+            float z = Mathf.Max(0, center.z - half.y - bounds.min.z) + Mathf.Min(0, center.z + half.y - bounds.max.z);
+            root.position += new Vector3(x, 0, z);
         }
         private void Finish()
         {

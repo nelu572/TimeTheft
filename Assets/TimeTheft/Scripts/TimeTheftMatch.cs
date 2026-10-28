@@ -343,6 +343,16 @@ namespace TimeTheft
             return true;
         }
 
+        public bool CancelClockSelection(Participant actor)
+        {
+            // 열쇠의 확정 뒤 B로 되돌리면 다른 시계를 반복 열람할 수 있으므로 기존 제한을 유지한다.
+            if (actor != ActiveParticipant || Stage != TurnStage.AwaitingAction || CurrentClock < 0 ||
+                CurrentClock >= ClocksPerBatch || used[CurrentClock] || DiscardedCount != 0 || HasSpareKeyReadiness) return false;
+            CurrentClock = -1;
+            Stage = TurnStage.AwaitingClock;
+            return true;
+        }
+
         public bool Settle()
         {
             if (Stage != TurnStage.Revealing) return false;

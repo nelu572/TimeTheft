@@ -1,4 +1,4 @@
 {
   "name": "TimeTheft.Runtime",
-  "references": ["Unity.TextMeshPro", "Unity.ugui", "Unity.InputSystem"]
+  "references": ["Unity.TextMeshPro", "Unity.ugui", "Unity.InputSystem", "TimeTheft.ItemPresentation"]
 }

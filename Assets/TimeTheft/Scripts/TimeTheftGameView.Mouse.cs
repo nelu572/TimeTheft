@@ -23,7 +23,7 @@ namespace TimeTheft
             inputController = GetComponent<TimeTheftGameController>();
             if (helpButton) return;
             focusCamera.EmptyTableClicked += CancelItemSelection;
-            focusCamera.SecondaryClicked += CancelItemSelection;
+            focusCamera.SecondaryClicked += CancelMouseSelection;
             helpButton = CreateMouseButton("Help", "도움말", 38, ClickHelp);
             helpButtonLabel = helpButton.GetComponentInChildren<TextMeshProUGUI>();
             overviewButton = CreateMouseButton("Return To Table", "테이블로", 100, ClickOverview);
@@ -61,6 +61,12 @@ namespace TimeTheft
             ToggleHelp();
             RefreshMouseControls();
         }
+        private void CancelMouseSelection()
+        {
+            if (inputController && inputController.Match != null && inputController.Match.Stage == TurnStage.AwaitingAction)
+            { inputController.CancelClockSelection(); return; }
+            CancelItemSelection();
+        }
 
         private void ClickOverview()
         {
@@ -82,7 +88,7 @@ namespace TimeTheft
             if (focusCamera)
             {
                 focusCamera.EmptyTableClicked -= CancelItemSelection;
-                focusCamera.SecondaryClicked -= CancelItemSelection;
+                focusCamera.SecondaryClicked -= CancelMouseSelection;
             }
             if (helpButton) { helpButton.onClick.RemoveListener(ClickHelp); Destroy(helpButton.gameObject); }
             if (overviewButton) { overviewButton.onClick.RemoveListener(ClickOverview); Destroy(overviewButton.gameObject); }

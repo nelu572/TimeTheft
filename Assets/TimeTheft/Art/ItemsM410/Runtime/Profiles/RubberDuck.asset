@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be6a5949ce026e244bc4a8229fb26b57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Item: 4
+  Clip: {fileID: -538064240528934132, guid: 53ef2be8467d1b94985347db7c7b82e3, type: 3}
+  OpponentClip: {fileID: -538064240528934132, guid: 05a49c9a7ccb29846b9be33ae7025295, type: 3}
+  RootPath: Duck_Root
+  ContactPath: 
+  DeployOnUse: 1
+  ActivateOnUse: 1
+  InventoryWidth: 1.15
+  InventoryEuler: {x: 0, y: 0, z: 0}
+  Segments:
+  - Phase: 0
+    FirstFrame: 1
+    LastFrame: 43
+    Destination: 1
+    DurationSeconds: 0
+  - Phase: 1
+    FirstFrame: 44
+    LastFrame: 49
+    Destination: 1
+    DurationSeconds: 0
+  - Phase: 2
+    FirstFrame: 50
+    LastFrame: 70
+    Destination: 2
+    DurationSeconds: 0
+  - Phase: 3
+    FirstFrame: 71
+    LastFrame: 116
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 4
+    FirstFrame: 117
+    LastFrame: 135
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 7
+    FirstFrame: 71
+    LastFrame: 116
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 5
+    FirstFrame: 136
+    LastFrame: 151
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 6
+    FirstFrame: 151
+    LastFrame: 151
+    Destination: 6
+    DurationSeconds: 0.65

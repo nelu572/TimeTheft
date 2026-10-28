@@ -20,7 +20,17 @@ MonoBehaviour:
     ExtraRedProbability: 0.5
     FirstParticipant: 0
     AiRiskTolerance: 0.5
-  PreviewDuration: 5.5
+    EnableAiItemStrategy: 1
+    AiDecisionNoise: 0.08
+    AiItemConservation: 0.35
+    ScrewdriverReductionPercent: 50
+    TimeBypassPercent: 50
+    InitialItemCount: 2
+    ItemsPerBatch: 1
+    MaxHeldItems: 3
+    RevealOpponentItems: 1
+    ItemWeights: 
+  PreviewDuration: 4
   ShuffleDuration: 1.1
   AiThinkDuration: 0.8
   RevealDuration: 1.2

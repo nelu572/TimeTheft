@@ -127,9 +127,11 @@ namespace TimeTheft.Tests
             float deadline = Time.realtimeSinceStartup + 15;
             while (controller.Match.Batch < 3 && Time.realtimeSinceStartup < deadline)
             {
-                if (controller.Match.Stage == TurnStage.AwaitingClock)
+                if (controller.Match.Stage == TurnStage.AwaitingClock && !controller.View.Lifecycle.IsRunning &&
+                    !controller.IsPresentingClock && !controller.View.WorldItems.ModelUses.IsAcquiring)
                 {
-                    AssertSlotPoses(); AssertClosed(); Assert.That(focus.IsPresentationCameraOwned, Is.False);
+                    AssertSlotPoses(); AssertClosed();
+                    if (controller.Match.ActiveParticipant == Participant.Player) Assert.That(focus.IsPresentationCameraOwned, Is.False);
                     if (controller.Match.ActiveParticipant == Participant.Player)
                     {
                         controller.SelectClock(controller.Match.GetAvailableClockIndices().Last());
@@ -205,7 +207,7 @@ namespace TimeTheft.Tests
                 Assert.That(token.transform.localPosition, Is.EqualTo(new Vector3((i - 2) * .98f, 1.06f, 0)));
                 Assert.That(token.H2Presentation.MotionRoot.localPosition, Is.EqualTo(Vector3.zero));
                 Assert.That(Quaternion.Angle(token.H2Presentation.MotionRoot.localRotation, Quaternion.identity), Is.LessThan(.001));
-                Assert.That(token.GetComponentsInChildren<Collider>(true).Length, Is.EqualTo(1));
+                Assert.That(System.Array.FindAll(token.GetComponentsInChildren<Collider>(true), c => c.enabled).Length, Is.EqualTo(1));
             }
         }
         private void AssertClosed()

@@ -18,6 +18,8 @@ namespace TimeTheft
         private Action<int> select;
         private Transform visual;
         private Vector3 visualPosition;
+        private BoxCollider decisionCollider;
+        private bool decisionClickable;
         public bool IsOpen => face.activeSelf;
         public TextMeshPro Number => number;
         public TextMeshPro Kind => kind;
@@ -53,6 +55,7 @@ namespace TimeTheft
 
         public void Show(ClockState state, bool keepClosedVisual = false)
         {
+            SetDecisionClickable(false);
             SetSelectable(false);
             SetSelected(false);
             face.transform.localScale = faceScale;
@@ -87,6 +90,40 @@ namespace TimeTheft
         }
 
         public void SetSelectable(bool value) { if (selectionTarget) selectionTarget.SetInputEnabled(value); }
+        public void SetDecisionClickable(bool value)
+        {
+            decisionClickable = value;
+            if (!value) { if (decisionCollider) decisionCollider.enabled = false; return; }
+            if (!decisionCollider)
+            {
+                var go = new GameObject("Selected Clock Click");
+                go.transform.SetParent(selectionTarget.transform, false);
+                decisionCollider = go.AddComponent<BoxCollider>();
+            }
+            SetSelectable(true);
+            UpdateDecisionCollider();
+        }
+        private void LateUpdate() => UpdateDecisionCollider();
+        private void UpdateDecisionCollider()
+        {
+            if (!decisionCollider) return;
+            bool active = decisionClickable && h2Presentation && selectionTarget.InputEnabled;
+            decisionCollider.enabled = active;
+            if (!active) return;
+            bool found = false; var bounds = new Bounds();
+            foreach (var renderer in h2Presentation.MotionRoot.GetComponentsInChildren<Renderer>())
+            {
+                if (!renderer.enabled) continue;
+                var b = renderer.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var p = decisionCollider.transform.InverseTransformPoint(b.center + Vector3.Scale(b.extents,
+                        new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1)));
+                    if (!found) { bounds = new Bounds(p, Vector3.zero); found = true; } else bounds.Encapsulate(p);
+                }
+            }
+            if (found) { decisionCollider.center = bounds.center; decisionCollider.size = bounds.size + Vector3.one * .025f; }
+        }
         public void SetSelected(bool value)
         {
             IsSelected = value;

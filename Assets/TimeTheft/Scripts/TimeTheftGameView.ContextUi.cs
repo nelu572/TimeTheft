@@ -1,4 +1,4 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -14,7 +14,7 @@ namespace TimeTheft
         private CanvasGroup itemGroup, actionGroup, noticeGroup;
         private TextMeshProUGUI itemTitle, itemTag, itemEffectTag, itemState, itemHint, actionTitle, actionHint, noticeText;
         private UiIndexGraphic itemFrame;
-        private TMP_FontAsset interfaceFont;
+        private TMP_FontAsset interfaceFont, interfaceFallback;
         private float noticeUntil;
         private bool itemWasVisible, actionWasVisible;
         private TurnStage lastUiStage = (TurnStage)(-1);
@@ -25,9 +25,25 @@ namespace TimeTheft
         private void UseInterfaceFont()
         {
             // 별도 정적 아틀라스를 사용해 플레이 중 원본 폰트 캐시를 갱신하지 않는다.
-            interfaceFont = Resources.Load<TMP_FontAsset>("TimeTheftUi");
-            if (!interfaceFont) return;
+            var template = Resources.Load<TMP_FontAsset>("TimeTheftUi");
+            if (!template) return;
             var previousFont = phaseLabel.font;
+            // 새 명칭의 누락 글리프만 런타임 fallback으로 보충한다. 원본 폰트/아틀라스는 수정하지 않는다.
+            interfaceFont = Instantiate(template); interfaceFont.name = "TimeTheftUi Runtime";
+            interfaceFont.hideFlags = HideFlags.DontSave;
+            interfaceFont.material = new Material(template.material);
+            var atlases = new Texture2D[template.atlasTextures.Length];
+            for (int i = 0; i < atlases.Length; i++) atlases[i] = Instantiate(template.atlasTextures[i]);
+            interfaceFont.atlasTextures = atlases;
+            interfaceFont.material.mainTexture = atlases[0];
+            interfaceFont.fallbackFontAssetTable = new System.Collections.Generic.List<TMP_FontAsset>();
+            if (previousFont.sourceFontFile)
+            {
+                interfaceFallback = TMP_FontAsset.CreateFontAsset(previousFont.sourceFontFile);
+                interfaceFallback.hideFlags = HideFlags.DontSave;
+                interfaceFont.fallbackFontAssetTable.Add(interfaceFallback);
+            }
+            interfaceFont.ReadFontAssetDefinition();
             foreach (var text in FindObjectsByType<TMP_Text>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (text.font != previousFont) continue;
@@ -64,12 +80,12 @@ namespace TimeTheft
             itemEffectTag.text = "효과";
             // 기존 설명 API와 같은 텍스트를 유지하되 실제 레이아웃은 오브젝트 카드에서 제공한다.
             itemDetailLabel.transform.SetParent(itemCard, false);
-            Place(itemDetailLabel.rectTransform, new Vector2(32, -164), new Vector2(416, 76));
-            itemDetailLabel.fontSize = 24; itemDetailLabel.color = UiInk;
-            itemDetailLabel.lineSpacing = 6;
+            Place(itemDetailLabel.rectTransform, new Vector2(32, -164), new Vector2(480, 76));
+            itemDetailLabel.fontSize = 26; itemDetailLabel.color = UiInk;
+            itemDetailLabel.lineSpacing = 8; itemDetailLabel.wordWrappingRatios = 0;
             itemDetailLabel.alignment = TextAlignmentOptions.TopLeft;
             itemState = Label(itemCard, "State", 21, UiBrass, Vector2.zero, new Vector2(416, 50));
-            itemHint = Label(itemCard, "Gesture", 22, UiInk, Vector2.zero, new Vector2(372, 54));
+            itemHint = Label(itemCard, "Gesture", 22, UiInk, Vector2.zero, new Vector2(436, 54));
 
             itemLeader = Leader("Item Anchor", UiQuiet);
             actionCard = Panel("Clock Decision", new Vector2(496, 236), out actionGroup);
@@ -78,7 +94,6 @@ namespace TimeTheft
             actionHint = Label(actionCard, "Decision Hint", 24, UiInk, new Vector2(76, -54), new Vector2(388, 44));
             StyleButton(collectButton, actionCard, new Vector2(28, -116), new Vector2(212, 94), "<b>징수</b>\n<size=19>수명 → Bank</size>", UiBrass);
             StyleButton(rationButton, actionCard, new Vector2(256, -116), new Vector2(212, 94), "<b>배급</b>\n<size=19>Bank → 수명</size>", UiQuiet);
-            StyleButton(keepClockButton, actionCard, new Vector2(28, -140), new Vector2(440, 64), "이 시계 유지", UiBrass);
             collectButton.targetGraphic.GetComponent<UiIndexGraphic>().Symbol = UiIndexGraphic.FrameSymbol.Collect;
             rationButton.targetGraphic.GetComponent<UiIndexGraphic>().Symbol = UiIndexGraphic.FrameSymbol.Ration;
             actionLeader = Leader("Clock Anchor", UiBrass);
@@ -91,6 +106,7 @@ namespace TimeTheft
             InitializeClockContext();
             InitializeCounterDeltas();
             BuildHelpCard();
+            InitializeUxCues();
             Canvas.preWillRenderCanvases += RefreshContextUi;
         }
 
@@ -198,12 +214,13 @@ namespace TimeTheft
         private void RefreshContextUi()
         {
             if (!uiRoot || itemMatch == null || !isActiveAndEnabled) return;
+            RefreshUxCues();
             bool busy = itemPresentation || (inputController && inputController.IsPresentingClock) ||
                 focusCamera.IsPresentationCameraOwned || IsHelpVisible;
             if (lastUiStage != itemMatch.Stage || lastUiActor != itemMatch.ActiveParticipant)
             {
                 lastUiStage = itemMatch.Stage; lastUiActor = itemMatch.ActiveParticipant;
-                noticeUntil = 0;
+                if (itemMatch.Stage == TurnStage.GameOver) noticeUntil = 0;
             }
             bool canShow = !busy && CanHoverItems;
             ItemWorldView shown = canShow && hoveredItem && !hoveredItem.IsRemoving ? hoveredItem : null;
@@ -219,7 +236,7 @@ namespace TimeTheft
                 bool usable = own && itemMatch.CanUseItems(Participant.Player);
                 itemFrame.Emphasized = selected;
                 itemFrame.Layout = selected ? UiIndexGraphic.FrameLayout.Detail : UiIndexGraphic.FrameLayout.Compact;
-                itemFrame.SetBands(112, 144);
+                itemFrame.SetBands(112, 80);
                 itemFrame.Accent = usable ? UiBrass : UiQuiet;
                 itemTag.text = "소지품 / 선택";
                 itemTitle.text = ItemWorldView.DisplayName(shown.Kind);
@@ -230,14 +247,14 @@ namespace TimeTheft
                 Place(itemTitle.rectTransform, selected ? new Vector2(76, -50) : new Vector2(24, -13),
                     selected ? new Vector2(368, 48) : new Vector2(232, 36));
                 itemDetailLabel.text = selected ? DescribeItem(shown.Kind) : "";
-                float bodyHeight = Mathf.Ceil(itemDetailLabel.GetPreferredValues(itemDetailLabel.text, 416, 0).y);
-                itemDetailLabel.rectTransform.sizeDelta = new Vector2(416, bodyHeight);
+                float bodyHeight = Mathf.Ceil(itemDetailLabel.GetPreferredValues(itemDetailLabel.text, 480, 0).y);
+                itemDetailLabel.rectTransform.sizeDelta = new Vector2(480, bodyHeight);
                 float bodyEnd = 164 + bodyHeight;
-                Place(itemState.rectTransform, new Vector2(32, -bodyEnd - 32), new Vector2(416, 50));
-                Place(itemHint.rectTransform, new Vector2(76, -bodyEnd - 94), new Vector2(372, 54));
-                itemCard.sizeDelta = selected ? new Vector2(480, bodyEnd + 164) : new Vector2(280, 88);
+                Place(itemState.rectTransform, new Vector2(32, -bodyEnd - 12), new Vector2(416, 50));
+                Place(itemHint.rectTransform, new Vector2(76, -bodyEnd - 50), new Vector2(436, 54));
+                itemCard.sizeDelta = selected ? new Vector2(544, bodyEnd + 116) : new Vector2(280, 88);
                 itemState.text = !own ? "상대의 보유품 · 사용 불가" : !usable ?
-                    (itemMatch.IsItemUseBlocked(Participant.Player) ? "고무 오리 · 이번 차례 아이템 사용 봉쇄" :
+                    (itemMatch.IsItemUseBlocked(Participant.Player) ? "러버덕 · 이번 차례 아이템 사용 봉쇄" :
                      itemMatch.ActiveParticipant == Participant.Ai ? "상대 차례 · 살펴보기만 가능" : "시계 선택 이후에는 사용 불가") : selected && shown.ItemId.HasValue
                     ? ItemFailureText(itemMatch.CheckItemUse(Participant.Player, shown.ItemId.Value)) : "클릭해 선택 · 아직 소모되지 않음";
                 if (!selected)
@@ -258,21 +275,14 @@ namespace TimeTheft
             Fade(itemGroup, itemVisible, ref itemWasVisible);
             itemLeader.gameObject.SetActive(itemVisible && selectedItemVisible);
 
-            bool key = !busy && keepClockButton.gameObject.activeSelf;
             bool action = !busy && collectButton.gameObject.activeSelf && collectButton.interactable;
-            bool actionVisible = (key || action) && itemMatch.CurrentClock >= 0;
+            bool actionVisible = action && itemMatch.CurrentClock >= 0;
             if (actionVisible)
             {
-                actionTitle.text = key ? "여벌 열쇠 / 확인" : "회중시계 / 행동 선택";
-                actionHint.text = "";
-                if (key)
-                {
-                    var face = itemMatch.GetPrivateClock(Participant.Player, itemMatch.CurrentClock);
-                    actionHint.text = face.HasValue ? (face.Value.Kind == ClockKind.Red ? "빨강" : "일반") + " " + face.Value.Hours + "h · 다른 시계로 1회 변경 가능" : "확인한 시계 유지 / 다른 시계 선택";
-                }
-                else actionHint.text = "숫자와 종류 비공개";
-                actionHint.fontSize = key ? 21 : 24;
-                actionHint.rectTransform.sizeDelta = new Vector2(388, key ? 70 : 44);
+                actionTitle.text = "회중시계 / 행동 선택";
+                actionHint.text = "숫자와 종류 비공개";
+                actionHint.fontSize = 24;
+                actionHint.rectTransform.sizeDelta = new Vector2(388, 44);
                 var clock = clocks[itemMatch.CurrentClock];
                 var h2 = clock.H2Presentation;
                 Vector3 point = h2 && h2.MotionRoot ? h2.MotionRoot.position : clock.transform.position;
@@ -389,7 +399,10 @@ namespace TimeTheft
         private void DestroyContextUi()
         {
             Canvas.preWillRenderCanvases -= RefreshContextUi;
+            EndBypassCue();
             if (uiRoot) Destroy(uiRoot.gameObject);
+            if (interfaceFont) Destroy(interfaceFont);
+            if (interfaceFallback) Destroy(interfaceFallback);
         }
     }
 }

@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using System;
 using System.Collections;
 using System.Linq;
@@ -146,7 +146,8 @@ namespace TimeTheft.Tests
             Assert.That(first.IsSelected, Is.True);
             Assert.That(controller.View.ItemDetailLabel.gameObject.activeSelf, Is.True);
             Assert.That(controller.View.ItemDetailLabel.text, Does.Contain("37"), "첫 선택 뒤 상세 효과를 표시한다");
-            Assert.That(first.GetComponent<Collider>().bounds.center, Is.EqualTo(colliderPosition));
+            Assert.That(Vector3.Distance(first.GetComponent<Collider>().bounds.center, colliderPosition),
+                Is.LessThan(.00001f), "선택 시 Collider는 유지한다 (Transform 부동소수점 오차 0.01mm 허용)");
             Assert.That(controller.Match.GetInventory(Participant.Player).Count, Is.EqualTo(2), "선택 클릭만으로 소모하지 않는다");
             AssertLegacyItemButtonsHidden();
             yield return ConfirmSelectedItem(first);
@@ -201,16 +202,19 @@ namespace TimeTheft.Tests
                 yield return ClickItem(World.PlayerItems.Single());
                 yield return ConfirmSelectedItem(World.PlayerItems.Single());
                 yield return WaitFor(() => !controller.IsPresentingItem);
+                var centered = controller.View.Clocks[0].H2Presentation.MotionRoot.position;
                 yield return ClickClock(0, TurnStage.AwaitingKeyDecision);
+                Assert.That(controller.View.Clocks[0].H2Presentation.MotionRoot.position, Is.EqualTo(centered), "열쇠 열람은 중앙 슬롯에서 마친다");
+                Assert.That(World.ModelUses.ActiveCount, Is.Zero, "열쇠 해치 완료 뒤 최종 시계 선택을 연다");
                 Assert.That(controller.View.PhaseLabel.text, Does.Contain("나만 확인"));
                 Assert.That(controller.Match.GetPrivateClock(Participant.Player, 0).HasValue, Is.True);
                 Assert.That(controller.Match.GetPrivateClock(Participant.Ai, 0).HasValue, Is.False);
-                if (reselect) yield return ClickClock(1, TurnStage.AwaitingAction);
-                else yield return ClickButton(controller.View.KeepClockButton);
+                Assert.That(controller.View.ClockValueLabels.All(label => string.IsNullOrEmpty(label.text) && !label.gameObject.activeInHierarchy), Is.True);
+                yield return ClickClock(reselect ? 1 : 0, TurnStage.AwaitingAction);
                 Assert.That(controller.Match.Stage, Is.EqualTo(TurnStage.AwaitingAction));
                 Assert.That(controller.Match.CurrentClock, Is.EqualTo(reselect ? 1 : 0));
                 Assert.That(controller.View.Clocks.All(i => !i.IsOpen), Is.True);
-                Assert.That(controller.View.KeepClockButton.gameObject.activeInHierarchy, Is.False);
+                Assert.That(controller.View.KeepClockButton, Is.Null, "별도 유지 버튼 없이 같은 월드 시계를 클릭한다");
             }
         }
 
@@ -227,7 +231,7 @@ namespace TimeTheft.Tests
             Assert.That(World.PlayerItems.Single().ItemId, Is.EqualTo(second));
             Assert.That(World.OpponentItems, Is.Empty);
             Assert.That(controller.Match.GetInventory(Participant.Ai).Any(i => i.Id == removed), Is.False);
-            yield return WaitFor(() => !controller.IsPresentingItem);
+            yield return WaitFor(() => !controller.IsPresentingItem && World.ModelUses.ActiveCount == 0, 20);
             yield return ClickItem(World.PlayerItems.Single());
             Assert.That(controller.View.SelectedItemId, Is.EqualTo(second));
             AssertLegacyItemButtonsHidden();
@@ -480,7 +484,7 @@ namespace TimeTheft.Tests
             yield return ConfirmSelectedItem(World.PlayerItems.Single());
             yield return WaitFor(() => !controller.IsPresentingItem);
             yield return ClickClock(4, TurnStage.AwaitingKeyDecision);
-            yield return ClickButton(controller.View.KeepClockButton);
+            yield return ClickClock(4, TurnStage.AwaitingAction);
             yield return ClickButton(controller.View.RationButton);
             bool sawAi = false, sawDiscard = false, sawNextBatch = false;
             int turns = 1;
@@ -529,8 +533,39 @@ namespace TimeTheft.Tests
             Assert.That(controller.Match, Is.SameAs(restarted), "다시하기 연타는 새 게임을 중복 시작하지 않는다");
         }
 
+        // Insert inside existing ItemWorldInteractionTests; uses its actual pointer helpers.
+        [UnityTest]
+        public IEnumerator HoveringAnotherItemClearsPendingSelectionAndReturningNeedsTwoNewClicks()
+        {
+            controller.RestartGame();
+            int driver = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.Screwdriver);
+            int bypass = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.TimeBypass);
+            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems && World.PlayerItems.Count == 2);
+            var first = World.PlayerItems.Single(item => item.ItemId == driver);
+            var second = World.PlayerItems.Single(item => item.ItemId == bypass);
+            yield return ClickItem(first);
+            Assert.That(controller.View.SelectedItemId, Is.EqualTo(driver));
+            Assert.That(first.IsSelected, Is.True);
+            yield return Hover(second);
+            Assert.That(controller.View.SelectedItemId, Is.Null, "다른 아이템 Hover는 기존 미사용 선택을 해제한다");
+            Assert.That(first.IsSelected || second.IsSelected, Is.False);
+            Assert.That(controller.View.ItemDetailLabel.gameObject.activeInHierarchy, Is.False, "B는 상세 Selected가 아닌 간단 Hover다");
+            yield return Hover(first);
+            Assert.That(controller.View.SelectedItemId, Is.Null, "A로 돌아와도 이전 선택이 복원되지 않는다");
+            Assert.That(first.IsSelected, Is.False);
+            Assert.That(controller.View.ItemDetailLabel.gameObject.activeInHierarchy, Is.False);
+            yield return new WaitForSecondsRealtime(.36f);
+            yield return ClickItem(first);
+            Assert.That(controller.View.SelectedItemId, Is.EqualTo(driver));
+            Assert.That(controller.Match.GetInventory(Participant.Player).Count, Is.EqualTo(2), "돌아온 뒤 첫 클릭은 새 선택일 뿐 소모하지 않는다");
+            yield return ConfirmSelectedItem(first);
+            Assert.That(controller.Match.GetInventory(Participant.Player).Single().Id, Is.EqualTo(bypass));
+        }
+
         private IEnumerator Hover(ItemWorldView item)
         {
+            yield return WaitFor(() => item && item.Target.InputEnabled && !controller.IsPresentingItem &&
+                !controller.IsPresentingClock && (!World.ModelUses || !World.ModelUses.IsAcquiring), 15);
             for (int frame = 0; frame < 10; frame++)
             {
                 PointAt(item.GetComponent<Collider>());
@@ -542,6 +577,8 @@ namespace TimeTheft.Tests
 
         private IEnumerator ClickItem(ItemWorldView item)
         {
+            if (item.Owner == Participant.Player && item.ItemId.HasValue && World.ModelUses)
+                yield return WaitFor(() => World.ModelUses.CanUseVisual(Participant.Player, item.ItemId.Value));
             yield return Hover(item);
             yield return ClickCurrentPointer();
         }
@@ -724,9 +761,9 @@ namespace TimeTheft.Tests
             yield return GameUiTestInput.Click(input, mouse, button, null, afterRelease);
         }
 
-        private IEnumerator WaitFor(Func<bool> predicate)
+        private IEnumerator WaitFor(Func<bool> predicate, float timeout = 6)
         {
-            float deadline = Time.realtimeSinceStartup + 6;
+            float deadline = Time.realtimeSinceStartup + timeout;
             while (!predicate() && Time.realtimeSinceStartup < deadline) yield return null;
             Assert.That(predicate(), Is.True, "진행 시간 초과: " + controller.Match.Stage);
         }

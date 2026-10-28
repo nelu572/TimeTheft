@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using TMPro;
 using UnityEngine;
 
@@ -32,6 +32,7 @@ namespace TimeTheft
             if (!worldItems) throw new InvalidOperationException("월드 아이템 표시부를 연결하세요.");
             selectItem = select;
             worldItems.Initialize(ClickWorldItem);
+            worldItems.BindModels(this);
             useSelectedItem = use;
             endItems = end;
             keepClock = keep;
@@ -41,7 +42,6 @@ namespace TimeTheft
             itemDetailLabel.fontSize = 21;
             useItemButton = CreateItemButton("Use Item", "사용", -135, UseSelectedItem);
             endItemsButton = CreateItemButton("End Items", "시계 선택", 135, EndItems);
-            keepClockButton = CreateItemButton("Keep Clock", "이 시계 유지", 0, KeepClock);
             cancelItemButton = CreateItemButton("Cancel Item Selection", "선택 취소", -270, CancelItemSelection);
             HideItemButtons();
             InitializeContextUi();
@@ -124,8 +124,8 @@ namespace TimeTheft
             itemMatch = match;
             itemPresentation = presenting;
             if (clearSelection) { SelectedItemId = SelectedTestItemId = null; lastItemClick = double.NegativeInfinity; }
-            // 근접 공개/정산 중 임시 블록이 핵심 정보를 가리지 않도록 표시만 잠시 숨긴다.
-            if (worldItems) worldItems.SetVisible(!presenting && match.Stage != TurnStage.BatchPreview);
+            // 연출/AI 단계는 입력만 막는다. 보유품 전체를 비활성화하면 매 턴 사라졌다 다시 나타난다.
+            if (worldItems) worldItems.SetVisible(true);
             RefreshWorldItems();
             RefreshItemControls();
         }
@@ -144,9 +144,9 @@ namespace TimeTheft
         }
 
         private bool CanHoverItems => !itemPresentation && itemMatch != null &&
-            (itemMatch.Stage == TurnStage.BatchPreview || itemMatch.Stage == TurnStage.AwaitingItems ||
-             itemMatch.Stage == TurnStage.AwaitingClock || itemMatch.Stage == TurnStage.AwaitingKeyDecision ||
-             itemMatch.Stage == TurnStage.AwaitingAction);
+            itemMatch.ActiveParticipant == Participant.Player && itemMatch.Stage == TurnStage.AwaitingItems &&
+            !IsHelpVisible && (!inputController || !inputController.IsPresentingClock && !inputController.IsPresentingItem) &&
+            (!worldItems.ModelUses || !worldItems.ModelUses.IsAcquiring);
 
         private void RefreshWorldItems()
         {
@@ -164,6 +164,15 @@ namespace TimeTheft
             if (lastItemHoverTarget == target) return;
             lastItemHoverTarget = target;
             hoveredItem = target ? target.GetComponent<ItemWorldView>() : null;
+            if (hoveredItem && !hoveredItem.IsRemoving && SelectedItemId.HasValue &&
+                hoveredItem.ItemId != SelectedItemId && itemMatch.CanUseItems(Participant.Player))
+            {
+                // 다른 물건을 살펴보면 미확정 선택을 끝낸다. Hover만으로 새 선택/사용을 예약하지 않는다.
+                SelectedItemId = SelectedTestItemId = null;
+                lastItemClick = double.NegativeInfinity;
+                RefreshWorldItems();
+                RefreshItemControls();
+            }
             RefreshItemDetails();
         }
 
@@ -174,10 +183,6 @@ namespace TimeTheft
             SetButton(useItemButton, false);
             SetButton(endItemsButton, false);
             SetButton(cancelItemButton, false);
-            bool key = !itemPresentation && itemMatch != null && itemMatch.ActiveParticipant == Participant.Player &&
-                itemMatch.Stage == TurnStage.AwaitingKeyDecision;
-            keepClockButton.gameObject.SetActive(key);
-            keepClockButton.interactable = key;
             RefreshItemDetails();
         }
 
@@ -207,8 +212,8 @@ namespace TimeTheft
             if (selected.HasValue)
             {
                 var item = selected.Value;
-                string selectedName = item.IsFoundationTest ? "[공통 기반 테스트] #" + item.Id : ItemName(item.Kind);
-                itemDetailLabel.text += "\n선택: " + selectedName + " · " + ItemFailureText(itemMatch.CheckItemUse(Participant.Player, item.Id));
+                string failure = ItemFailureText(itemMatch.CheckItemUse(Participant.Player, item.Id));
+                if (!string.IsNullOrEmpty(failure)) itemDetailLabel.text += "\n" + failure;
             }
             else if (hover && hoveredItem.Owner == Participant.Player)
                 itemDetailLabel.text += itemMatch.CanUseItems(Participant.Player) ? "\n클릭으로 선택 · 같은 아이템을 다시 클릭해 사용" : "\n자기 차례 아이템 단계에서 사용 가능";
@@ -219,12 +224,16 @@ namespace TimeTheft
             if (!kind.HasValue) return "종류 비공개";
             switch (kind.Value)
             {
-                case ItemKind.SpareKey: return "첫 시계의 종류·숫자를 나만 확인하고 유지 또는 다른 시계로 1회 재선택";
-                case ItemKind.Screwdriver: return "이번 차례 빨간 시계 징수의 자기 손실" + (screwdriverPercent.HasValue ? " " + screwdriverPercent.Value + "% 경감" : " 경감") + " · 일반 징수·배급은 미발동 소모";
-                case ItemKind.TimeBypass: return "이번 차례 징수 실제 손실" + (bypassPercent.HasValue ? "의 " + bypassPercent.Value + "%" : " 일부") + "를 징수 대상의 상대에게 지급 · 빨강이면 상대가 수령";
-                case ItemKind.Scissors: return "상대 미사용 보유품을 무작위로 1개 제거 · 대상이 없으면 소모하지 않음";
-                case ItemKind.RubberDuck: return "상대의 다음 실제 행동 차례에 아이템 사용 봉쇄 · 시계와 징수·배급은 가능";
-                default: return "상대의 다음 차례 생략 · 시계는 사용하지 않음";
+                case ItemKind.SpareKey: return "닫힌 시계 1개의 시간·종류를\n나만 확인합니다.\n확인 후 같은 시계 또는\n다른 시계를 선택합니다.";
+                case ItemKind.Screwdriver: return "이번 차례 <nobr><color=#C88F7D>빨간 시계 징수</color></nobr>에서\n내 시간 손실을 "
+                    + (screwdriverPercent.HasValue ? "<nobr><color=#E4C889>" + screwdriverPercent.Value + "% 경감</color></nobr>합니다." : "줄입니다.")
+                    + "\n일반 징수·배급에는\n효과가 없습니다.";
+                case ItemKind.TimeBypass: return "이번 차례 징수 손실의 "
+                    + (bypassPercent.HasValue ? "<nobr><color=#E4C889>" + bypassPercent.Value + "%</color></nobr>" : "일부")
+                    + "를\n손실을 입은 쪽의 상대에게\n지급합니다.\n빨간 시계라면\n상대가 받습니다.";
+                case ItemKind.Scissors: return "상대의 미사용 아이템 1개를\n무작위로 제거합니다.\n대상이 없으면\n소모되지 않습니다.";
+                case ItemKind.RubberDuck: return "상대의 다음 행동 차례에\n아이템 사용을 막습니다.\n시계 선택과 징수·배급은\n가능합니다.";
+                default: return "상대의 다음 차례를\n건너뜁니다.\n그 차례에는\n시계를 사용하지 않습니다.";
             }
         }
 
@@ -232,11 +241,11 @@ namespace TimeTheft
         {
             switch (failure)
             {
-                case ItemUseFailure.None: return "사용 가능 · 사용하면 취소할 수 없습니다";
-                case ItemUseFailure.AlreadyActive: return "이미 효과가 준비되어 사용 불가 · 소모 안 됨";
-                case ItemUseFailure.NoTarget: return "제거할 상대 보유품 없음 · 소모 안 됨";
-                case ItemUseFailure.UseNotAllowed: return "아이템 사용 봉쇄 · 소모 안 됨";
-                default: return "현재 사용 불가 · 소모 안 됨";
+                case ItemUseFailure.None: return "";
+                case ItemUseFailure.AlreadyActive: return "이미 효과가 준비되어 있습니다.";
+                case ItemUseFailure.NoTarget: return "제거할 상대 아이템이 없습니다.";
+                case ItemUseFailure.UseNotAllowed: return "아이템 사용이 봉쇄되어 있습니다.";
+                default: return "지금은 사용할 수 없습니다.";
             }
         }
 
@@ -264,7 +273,7 @@ namespace TimeTheft
 
         private void KeepClock()
         {
-            if (!keepClockButton.interactable) return;
+            if (!keepClockButton || !keepClockButton.interactable) return;
             focusCamera.SuppressPointerForCurrentFrame();
             HideItemButtons();
             keepClock?.Invoke();

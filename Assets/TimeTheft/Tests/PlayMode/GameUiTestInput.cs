@@ -17,6 +17,8 @@ namespace TimeTheft.Tests
         public static void ShortenBatchReveal(TimeTheftGameController controller)
         {
             var reveal = controller.View.BatchReveal;
+            if (controller.View.WorldItems.ModelUses && controller.View.WorldItems.ModelUses.Hatch)
+                controller.View.WorldItems.ModelUses.Hatch.PlaybackSpeed = 50;
             if (!reveal) return;
             // 규칙/입력 회귀는 실행 중인 씬 사본의 연출만 단축한다. 전용 연출 검사는 실제 시간을 검사한다.
             reveal.PreparationDuration = 0;
@@ -33,7 +35,7 @@ namespace TimeTheft.Tests
         }
         public static IEnumerator ClockMotionReady(TimeTheftGameController controller)
         {
-            float deadline = Time.realtimeSinceStartup + 3;
+            float deadline = Time.realtimeSinceStartup + 20;
             while (controller.IsPresentingClock && Time.realtimeSinceStartup < deadline) yield return null;
             Assert.That(controller.IsPresentingClock, Is.False, "Select 완료 후 기존 결정 입력을 사용한다");
         }

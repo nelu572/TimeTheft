@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be6a5949ce026e244bc4a8229fb26b57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Item: 5
+  Clip: {fileID: 9136797414828056314, guid: 16b39140c3a83a44f830ec66a3f88da8, type: 3}
+  OpponentClip: {fileID: 0}
+  RootPath: TT_Cuffs_Root
+  ContactPath: 
+  DeployOnUse: 1
+  ActivateOnUse: 1
+  InventoryWidth: 1.8
+  InventoryEuler: {x: 0, y: 0, z: 0}
+  Segments:
+  - Phase: 0
+    FirstFrame: 1
+    LastFrame: 44
+    Destination: 1
+    DurationSeconds: 0
+  - Phase: 1
+    FirstFrame: 45
+    LastFrame: 54
+    Destination: 1
+    DurationSeconds: 0
+  - Phase: 2
+    FirstFrame: 55
+    LastFrame: 84
+    Destination: 2
+    DurationSeconds: 0
+  - Phase: 3
+    FirstFrame: 85
+    LastFrame: 106
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 4
+    FirstFrame: 107
+    LastFrame: 122
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 7
+    FirstFrame: 123
+    LastFrame: 141
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 5
+    FirstFrame: 142
+    LastFrame: 163
+    Destination: 0
+    DurationSeconds: 0
+  - Phase: 6
+    FirstFrame: 164
+    LastFrame: 190
+    Destination: 6
+    DurationSeconds: 0

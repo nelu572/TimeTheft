@@ -115,7 +115,10 @@ namespace TimeTheft
 
         public void SelectClock(int index)
         {
-            if (!isActiveAndEnabled || IsPresentingItem || selectingClock || Match == null) return;
+            if (!isActiveAndEnabled || IsPresentingItem || selectingClock || Match == null ||
+                (view.WorldItems.ModelUses && view.WorldItems.ModelUses.IsAcquiring)) return;
+            if (Match.Stage == TurnStage.AwaitingAction && Match.ActiveParticipant == Participant.Player && index == Match.CurrentClock)
+            { CancelClockSelection(); return; }
             if (Match.Stage == TurnStage.AwaitingItems && Match.ActiveParticipant == Participant.Player)
             {
                 if (index < 0 || index >= TimeTheftMatch.ClocksPerBatch ||
@@ -129,28 +132,72 @@ namespace TimeTheft
             }
             if (Match.Stage == TurnStage.AwaitingKeyDecision)
             {
-                if (Match.ReselectPeekedClock(Participant.Player, index))
+                bool selected = index == Match.CurrentClock ? Match.KeepPeekedClock(Participant.Player)
+                    : Match.ReselectPeekedClock(Participant.Player, index);
+                if (selected)
                 { view.OpenAction(Match); selectingClock = true; StartCoroutine(PresentClockSelection()); }
                 return;
             }
             if (!Match.SelectClock(Participant.Player, index)) return;
-            if (Match.Stage == TurnStage.AwaitingKeyDecision) view.OpenKeyDecision(Match);
+            if (Match.Stage == TurnStage.AwaitingKeyDecision) view.LockClockMotionInput();
             else view.OpenAction(Match);
             selectingClock = true; StartCoroutine(PresentClockSelection());
         }
 
         public void KeepPeekedClock()
         {
-            if (!isActiveAndEnabled || IsPresentingItem || selectingClock || Match == null || !Match.KeepPeekedClock(Participant.Player)) return;
-            view.OpenAction(Match);
+            if (Match != null && Match.Stage == TurnStage.AwaitingKeyDecision) SelectClock(Match.CurrentClock);
+        }
+
+        public bool CancelClockSelection()
+        {
+            if (!isActiveAndEnabled || IsPresentingItem || selectingClock || Match == null || Match.ActiveParticipant != Participant.Player) return false;
+            int index = Match.CurrentClock;
+            if (!Match.CancelClockSelection(Participant.Player))
+            {
+                if (Match.Stage == TurnStage.AwaitingAction && Match.HasSpareKeyReadiness)
+                    view.ShowContextNotice("열쇠 확인 후 확정한 선택은 되돌릴 수 없습니다");
+                return false;
+            }
+            selectingClock = true; view.LockClockMotionInput();
+            StartCoroutine(ReturnCancelledClock(index));
+            return true;
+        }
+        private IEnumerator ReturnCancelledClock(int index)
+        {
+            var motion = view.TurnPresentation;
+            var model = view.Clocks[index].H2Presentation;
+            if (motion && model && motion.CanPlay(view, index))
+            {
+                model.CaptureBatchReturnPose();
+                yield return Animate(motion.LegacyReturnDuration, t => {
+                    model.ReturnBatchPose(Mathf.SmoothStep(0, 1, t));
+                    model.MotionRoot.position += Vector3.up * (motion.SelectClearance * Mathf.Sin(Mathf.PI * t));
+                });
+                model.EndBatchPose(); motion.Cancel();
+            }
+            selectingClock = false;
+            view.OpenTurn(Match);
         }
 
         private IEnumerator PresentClockSelection()
         {
             var motion = view.TurnPresentation;
-            if (!motion || !motion.CanPlay(view, Match.CurrentClock)) { selectingClock = false; yield break; }
+            if (!motion || !motion.CanPlay(view, Match.CurrentClock))
+            {
+                selectingClock = false;
+                if (Match.Stage == TurnStage.AwaitingKeyDecision) view.OpenKeyDecision(Match);
+                else if (Match.Stage == TurnStage.AwaitingAction) view.OpenAction(Match);
+                yield break;
+            }
             selectingClock = true; view.LockClockMotionInput();
-            yield return motion.Select(view, Match.CurrentClock, Match.ActiveParticipant == Participant.Ai);
+            if (Match.Stage == TurnStage.AwaitingKeyDecision && view.WorldItems.ModelUses)
+            {
+                IsPresentingItem = true;
+                yield return view.WorldItems.ModelUses.InspectKey(Match, Match.CurrentClock);
+                IsPresentingItem = false;
+            }
+            else yield return motion.Select(view, Match.CurrentClock, Match.ActiveParticipant == Participant.Ai);
             selectingClock = false;
             if (!isActiveAndEnabled) yield break;
             if (Match.Stage == TurnStage.AwaitingKeyDecision) view.OpenKeyDecision(Match);
@@ -160,6 +207,7 @@ namespace TimeTheft
         public void UseItem(int itemId)
         {
             if (!isActiveAndEnabled || IsPresentingItem || Match == null) return;
+            if (view.WorldItems.ModelUses && !view.WorldItems.ModelUses.CanUseVisual(Participant.Player, itemId)) return;
             var result = Match.UseItem(Participant.Player, itemId);
             if (!result.Succeeded)
             {
@@ -195,6 +243,9 @@ namespace TimeTheft
             view.ShowItemUse(PublicItemResult(result));
             view.RefreshInventory(Match);
             yield return Animate(.15f, null);
+            while (view.WorldItems.ModelUses && view.WorldItems.ModelUses.IsPreparing)
+            { if (skipRequested) view.WorldItems.ModelUses.SkipMotion(); yield return null; }
+            skipRequested = false;
             IsPresentingItem = false;
         }
 
@@ -206,6 +257,9 @@ namespace TimeTheft
 
         private IEnumerator OpenTurn()
         {
+            // 공급은 기본 테이블 구도에서 끝낸 뒤 AI의 카메라/턴 소유권을 넘긴다.
+            if (view.WorldItems.ModelUses && view.WorldItems.ModelUses.IsAcquiring)
+                yield return view.WorldItems.ModelUses.WaitForAcquisitions();
             var turnMotion = view.TurnPresentation;
             if (Match.ActiveParticipant == Participant.Ai && turnMotion)
                 for (int index = 0; index < TimeTheftMatch.ClocksPerBatch; index++)
@@ -214,6 +268,7 @@ namespace TimeTheft
             {
                 view.ShowItemPhase(Match, 0);
                 if (Match.ActiveParticipant == Participant.Player) yield break;
+                if (view.WorldItems.ModelUses) yield return view.WorldItems.ModelUses.WaitForAcquisitions();
                 // 매 성공 뒤 새 관찰로 재평가한다. 시작 보유량과 시도 ID로 반복을 유한하게 제한한다.
                 int itemBudget = Match.GetInventory(Participant.Ai).Count;
                 var attempted = new HashSet<int>();
@@ -242,19 +297,23 @@ namespace TimeTheft
             if (!Match.SelectClock(Participant.Ai, selected)) yield break;
             if (Match.Stage == TurnStage.AwaitingKeyDecision)
             {
+                yield return PresentClockSelection();
                 var keyInfo = Match.ObserveItems(Participant.Ai);
                 int choice = keyInfo.Strategy.Enabled ? TimeTheftAi.ChooseKeyClock(keyInfo, aiRandom) : Match.CurrentClock;
                 if (choice == Match.CurrentClock || !Contains(keyInfo.AvailableClockIndices, choice)) Match.KeepPeekedClock(Participant.Ai);
                 else if (!Match.ReselectPeekedClock(Participant.Ai, choice)) Match.KeepPeekedClock(Participant.Ai);
+                view.OpenAction(Match);
+                yield return PresentClockSelection();
             }
-            view.OpenAction(Match);
-            yield return PresentClockSelection();
+            else { view.OpenAction(Match); yield return PresentClockSelection(); }
             yield return Animate(settings.AiThinkDuration * .5f, null);
             // 합법적인 자기 지식과 공개 관찰만 사용한다. 게임 RNG/숨은 순서에는 접근하지 않는다.
             var actionInfo = Match.ObserveItems(Participant.Ai);
             var action = actionInfo.Strategy.Enabled ? TimeTheftAi.Decide(actionInfo, aiRandom)
                 : TimeTheftAi.Decide(actionInfo.PublicGame, actionInfo.Strategy.RiskTolerance, aiRandom);
             if (!Match.CommitAction(Participant.Ai, action)) yield break;
+            view.ShowOpponentCommittedAction(Match);
+            yield return Animate(1.35f, null, false);
             yield return Resolve();
         }
 
@@ -270,9 +329,11 @@ namespace TimeTheft
                 view.ShowRevealDetails(Match);
             }
             yield return Animate(settings.RevealDuration, null);
+            if (view.WorldItems.ModelUses) yield return view.WorldItems.ModelUses.PresentHeldClockEffects(Match);
             if (settlementMotion) yield return motion.SettlementTransition();
             else if (cinematic) yield return motion.ReturnToLegacy();
             if (!Match.Settle()) yield break;
+            if (view.WorldItems.ModelUses) yield return view.WorldItems.ModelUses.PresentSettlementEffects(Match);
             view.BeginTransfer(Match);
             if (settlementMotion)
             {
@@ -281,6 +342,7 @@ namespace TimeTheft
                 motion.SetSettlementPhase(H2TurnPresentation.TurnPhase.CountingTime);
             }
             yield return Animate(settings.TransferDuration, view.NumbersFrame);
+            if (view.WorldItems.ModelUses) view.WorldItems.ModelUses.EndSettlementEffects(Match);
             if (settlementMotion) motion.SetSettlementPhase(H2TurnPresentation.TurnPhase.SettlementHold);
             yield return Animate(settings.ResultHoldDuration, null);
             var lifecycle = view.Lifecycle;
@@ -346,11 +408,12 @@ namespace TimeTheft
         public void SkipAnimation()
         {
             if (!CanSkipAnimation) return;
+            if (view.WorldItems.ModelUses) view.WorldItems.ModelUses.SkipMotion();
             var lifecycle = view.Lifecycle;
             if (lifecycle && lifecycle.IsRunning) { lifecycle.SkipMotion(); return; }
             var motion = view.TurnPresentation;
             if (motion && motion.IsBusy) { motion.SkipMotion(); return; }
-            if (IsPresentingItem) { skipRequested = true; return; }
+            if (IsPresentingItem) { skipRequested = true; if (view.WorldItems.ModelUses) view.WorldItems.ModelUses.SkipMotion(); return; }
             if (Match.Stage == TurnStage.AwaitingAction ||
                 Match.Stage == TurnStage.AwaitingClock || Match.Stage == TurnStage.AwaitingItems ||
                 Match.Stage == TurnStage.AwaitingKeyDecision ||

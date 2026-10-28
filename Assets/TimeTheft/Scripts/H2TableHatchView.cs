@@ -9,6 +9,8 @@ namespace TimeTheft
         [SerializeField] private Collider receiverFloor;
         [SerializeField] private AnimationClip openClip, closeClip, latchClip;
         public Transform Anchor => anchor;
+        // 메인 T3의 실제 절단 개구부. 프레임 외곽이나 덮개 크기가 아니다.
+        public Vector2 ClearApertureSize = new Vector2(1.35f, 1.07f);
         public float FloorHeight => receiverFloor ? receiverFloor.bounds.max.y : float.NegativeInfinity;
         public Transform FlapPivot => flapPivot;
         public Transform LatchPivot => latchPivot;

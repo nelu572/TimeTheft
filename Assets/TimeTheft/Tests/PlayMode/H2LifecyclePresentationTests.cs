@@ -120,10 +120,10 @@ namespace TimeTheft.Tests
                     {
                         if (bounds.min.y < 1.0074f && bounds.max.y > 1.0076f)
                         {
-                            Assert.That(bounds.min.x, Is.GreaterThanOrEqualTo(2.058f), "실제 전체 시계 메시가 개구부를 통과한다");
-                            Assert.That(bounds.max.x, Is.LessThanOrEqualTo(3.442f));
-                            Assert.That(bounds.min.z, Is.GreaterThanOrEqualTo(-1.502f));
-                            Assert.That(bounds.max.z, Is.LessThanOrEqualTo(-.398f));
+                            Assert.That(bounds.min.x, Is.GreaterThanOrEqualTo(life.Hatch.Anchor.position.x - .677f), "실제 전체 시계 메시가 개구부를 통과한다");
+                            Assert.That(bounds.max.x, Is.LessThanOrEqualTo(life.Hatch.Anchor.position.x + .677f));
+                            Assert.That(bounds.min.z, Is.GreaterThanOrEqualTo(life.Hatch.Anchor.position.z - .537f));
+                            Assert.That(bounds.max.z, Is.LessThanOrEqualTo(life.Hatch.Anchor.position.z + .537f));
                         }
                         Assert.That(bounds.min.y, Is.GreaterThanOrEqualTo(-.6962f), "수납부 바닥을 관통하지 않는다");
                     }
@@ -214,7 +214,7 @@ namespace TimeTheft.Tests
                 Assert.That(hit.collider.name, Does.Contain("ImpactFloor"), "기존 상판/BoxCollider가 개구부를 막지 않는다");
                 Assert.That(hit.point.y, Is.EqualTo(-.69413f).Within(.001f));
             }
-            Assert.That(Physics.Raycast(new Vector3(anchor.x + 1, 2.5f, anchor.z), Vector3.down, out hit, 4), Is.True);
+            Assert.That(Physics.Raycast(new Vector3(anchor.x - 1, 2.5f, anchor.z), Vector3.down, out hit, 4), Is.True);
             Assert.That(hit.collider.name, Is.EqualTo("T3_Tabletop_WithHatchHole")); Assert.That(hit.point.y, Is.EqualTo(1.0075f).Within(.001f));
             hatch.ResetClosed(); yield return null;
         }
