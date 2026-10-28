@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fe0a8ab0df86be458c047ff466d303e, type: 3}
+  m_Name: TitleScreenTheme
+  m_EditorClassIdentifier: 
+  HeadingFont: {fileID: 11400000, guid: e4c2b84e201f7334fa5953af8c7c4bba, type: 2}
+  BodyFont: {fileID: 11400000, guid: e4c2b84e201f7334fa5953af8c7c4bba, type: 2}
+  Background: {r: 0.047058824, g: 0.06666667, b: 0.07450981, a: 1}
+  Panel: {r: 0.06666667, g: 0.09803922, b: 0.105882354, a: 1}
+  Text: {r: 0.9098039, g: 0.89411765, b: 0.8392157, a: 1}
+  MutedText: {r: 0.6, g: 0.6431373, b: 0.627451, a: 1}
+  Accent: {r: 0.72156864, g: 0.5921569, b: 0.35686275, a: 1}
+  Rule: {r: 0.25882354, g: 0.27450982, b: 0.25490198, a: 1}
+  Button: {r: 0.05882353, g: 0.09019608, b: 0.09019608, a: 0.9098039}
+  Hover: {r: 0.72156864, g: 0.5921569, b: 0.35686275, a: 1}
+  Pressed: {r: 0.6349804, g: 0.5210981, b: 0.31403923, a: 1}
+  Disabled: {r: 0.08627451, g: 0.105882354, b: 0.10980392, a: 0.39215687}
