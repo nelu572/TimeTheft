@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/TimeTheft/TitleScreen/Scenes/TimeTheftTitle.unity
+    guid: b87574173b171a8479eb650ff42dae42
+  - enabled: 1
     path: Assets/Scenes/TimeTheftGame.unity
     guid: 0e3c90fecee029941b97aec376be7694
   m_configObjects:
