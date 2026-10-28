@@ -817,7 +817,9 @@ namespace TimeTheft.Tests
             settings.Rules.MinimumHours = settings.Rules.MaximumHours = 8;
             controller.RestartGame();
             int id = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.TimeBypass);
-            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems);
+            // 모델 A 진입 뒤에도 공급 연출이 입력을 잠글 수 있다. 실제 사용 가능 시점에 제출한다.
+            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingItems &&
+                controller.View.WorldItems.ModelUses.CanUseVisual(Participant.Player, id) && controller.View.Clocks[0].SelectionTarget.InputEnabled);
             controller.UseItem(id);
             yield return WaitFor(() => !controller.IsPresentingItem);
             yield return ClickClock(ReferenceClockIndex(ClockKind.Normal));

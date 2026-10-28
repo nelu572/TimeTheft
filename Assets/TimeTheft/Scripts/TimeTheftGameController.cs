@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -11,6 +11,7 @@ namespace TimeTheft
     {
         [SerializeField] private TimeTheftSettings settings;
         private TimeTheftGameView view;
+        private TimeTheftResultPresentation resultPresentation;
         private System.Random aiRandom;
         private bool skipRequested;
         private bool selectingClock;
@@ -27,6 +28,8 @@ namespace TimeTheft
             view.Initialize(SelectClock, ChooseAction, RequestRestart);
             view.InitializeItemControls(SelectItem, UseSelectedItem, EndItemPhase, KeepPeekedClock);
             view.InitializeMouseControls(SkipAnimation);
+            resultPresentation = view.ResultPresentation;
+            resultPresentation.Initialize(this, view, RequestRestart);
             RestartGame();
         }
 
@@ -51,7 +54,7 @@ namespace TimeTheft
         public void RequestRestart()
         {
             if (!isActiveAndEnabled || Match == null || Match.Stage != TurnStage.GameOver ||
-                !view || !view.IsResultVisible) return;
+                !view || !view.IsResultVisible || !resultPresentation.CanRestart) return;
             RestartGame();
         }
 
@@ -68,6 +71,7 @@ namespace TimeTheft
             aiRandom = new System.Random(seed ^ 0x51a7);
             view.ConfigureItemRules(settings.Rules);
             view.ResetTable(Match);
+            resultPresentation.ResetForMatch(Match);
             StartCoroutine(DealBatch());
         }
 
@@ -353,7 +357,12 @@ namespace TimeTheft
                 if (lifecycle && lifecycle.CanPlay(view)) yield return lifecycle.Remove(view, Match.CurrentClock, false);
                 else yield return motion.ReturnToLegacy();
             }
-            if (Match.Stage == TurnStage.GameOver) { view.Result(Match); yield break; }
+            if (Match.Stage == TurnStage.GameOver)
+            {
+                yield return resultPresentation.PlayEnding(Match.Winner);
+                view.Result(Match);
+                yield break;
+            }
             Match.CompleteTurn();
             if (motion) motion.Cancel();
             if (Match.Stage == TurnStage.BatchComplete)
@@ -407,6 +416,7 @@ namespace TimeTheft
 
         public void SkipAnimation()
         {
+            if (resultPresentation && resultPresentation.IsEnding) { resultPresentation.SkipEnding(); return; }
             if (!CanSkipAnimation) return;
             if (view.WorldItems.ModelUses) view.WorldItems.ModelUses.SkipMotion();
             var lifecycle = view.Lifecycle;

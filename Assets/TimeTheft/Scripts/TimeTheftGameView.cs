@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -18,11 +18,9 @@ namespace TimeTheft
         [FormerlySerializedAs("withdrawButton")]
         [SerializeField] private UnityEngine.UI.Button rationButton;
         [SerializeField] private TextMeshProUGUI phaseLabel;
-        [Header("기존 도움말과 결과 전표")]
-        [SerializeField] private GameObject helpCard, resultDisplay;
-        [SerializeField] private TextMeshPro resultTitle, resultDetail;
-        [SerializeField] private TabletopFocusTarget restart;
-        private Action restartGame;
+        [Header("도움말")]
+        [SerializeField] private GameObject helpCard;
+        private TimeTheftResultPresentation resultPresentation;
         private Action<TimeAction> choose;
         private bool initialized;
         private int fromPlayer, fromAi, fromBank, toPlayer, toAi, toBank;
@@ -40,7 +38,8 @@ namespace TimeTheft
         public H2BatchRevealPresentation BatchReveal => GetComponent<H2BatchRevealPresentation>();
         public H2ClockLifecyclePresentation Lifecycle => GetComponent<H2ClockLifecyclePresentation>();
         public H2TurnPresentation TurnPresentation => GetComponent<H2TurnPresentation>();
-        public bool IsResultVisible => resultDisplay.activeSelf;
+        public TimeTheftResultPresentation ResultPresentation => resultPresentation ? resultPresentation : resultPresentation = GetComponent<TimeTheftResultPresentation>();
+        public bool IsResultVisible => ResultPresentation && ResultPresentation.IsVisible;
         public bool IsCountingTime { get; private set; }
         public int? SelectedTestItemId { get; private set; }
         public int? SelectedItemId { get; private set; }
@@ -51,7 +50,7 @@ namespace TimeTheft
         {
             if (clocks == null || clocks.Length != TimeTheftMatch.ClocksPerBatch || !focusCamera ||
                 !playerLife || !aiLife || !bank || !batchLabel || !collectButton || !rationButton ||
-                !phaseLabel || !helpCard || !resultDisplay || !resultTitle || !resultDetail || !restart ||
+                !phaseLabel || !helpCard || !ResultPresentation ||
                 !playerDelta || !aiDelta || !bankDelta)
                 throw new InvalidOperationException("TimeTheftGameView의 시계 5개·계수기·행동 UI·결과 전표를 연결하세요.");
             for (int i = 0; i < clocks.Length; i++)
@@ -60,11 +59,10 @@ namespace TimeTheft
                 clocks[i].Initialize(i, selectClock);
             }
             CaptureClockLayout();
-            choose = action; restartGame = newGame;
+            choose = action;
             if (initialized) return;
             collectButton.onClick.AddListener(Collect);
             rationButton.onClick.AddListener(Ration);
-            restart.Clicked += Restart;
             playerScale = playerLife.transform.localScale;
             aiScale = aiLife.transform.localScale;
             bankScale = bank.transform.localScale;
@@ -79,9 +77,7 @@ namespace TimeTheft
             ResetClockLayout();
             if (worldItems) worldItems.SetVisible(true);
             SetItemContext(match, false, true);
-            resultDisplay.SetActive(false);
             helpCard.SetActive(false);
-            restart.SetInputEnabled(false);
             Numbers(match);
             RefreshInventory(match);
         }
@@ -380,13 +376,10 @@ namespace TimeTheft
             RefreshInventory(match);
             if (worldItems) worldItems.SetVisible(false);
             Numbers(match);
-            resultDisplay.SetActive(true);
-            restart.SetInputEnabled(true);
-            Inspectable(true);
+            Inspectable(false);
             Controls(false);
-            resultTitle.text = match.Winner == GameWinner.Player ? "당신이 살아남았습니다" : "당신의 시간이 다했습니다";
-            resultDetail.text = "Time Bank 잔액 " + GameTime.Format(match.BankMinutes);
-            phaseLabel.text = resultTitle.text + "\n전표의 다시하기를 클릭하세요";
+            phaseLabel.text = "";
+            ResultPresentation.ShowResult(match);
         }
 
         public void Numbers(TimeTheftMatch match)
@@ -451,14 +444,20 @@ namespace TimeTheft
             focusCamera.SuppressPointerForCurrentFrame();
             choose?.Invoke(action);
         }
-        private void Restart()
+        public void PrepareResultPresentation()
         {
-            if (!IsResultVisible || itemMatch == null || itemMatch.Stage != TurnStage.GameOver) return;
-            restart.SetInputEnabled(false);
-            focusCamera.SuppressPointerForCurrentFrame();
-            restartGame?.Invoke();
+            helpCard.SetActive(false);
+            Controls(false);
+            Inspectable(false);
+            ClearDeltas();
+            phaseLabel.text = "";
         }
-        public void ToggleHelp() { helpCard.SetActive(!helpCard.activeSelf); if (helpCard.activeSelf) focusCamera.ReturnToOverview(); }
+        public void ToggleHelp()
+        {
+            if (ResultPresentation && (ResultPresentation.IsEnding || ResultPresentation.IsVisible)) return;
+            helpCard.SetActive(!helpCard.activeSelf);
+            if (helpCard.activeSelf) focusCamera.ReturnToOverview();
+        }
         private static string ActorName(Participant participant) => participant == Participant.Player ? "나" : "상대";
         private void CreateInventoryLabel()
         {
@@ -494,6 +493,7 @@ namespace TimeTheft
         }
         public void CancelPresentation()
         {
+            if (ResultPresentation) ResultPresentation.ResetPresentation();
             if (Lifecycle) Lifecycle.Cancel();
             if (ShufflePresentation) ShufflePresentation.Cancel();
             if (BatchReveal) BatchReveal.Cancel();
@@ -519,7 +519,6 @@ namespace TimeTheft
             if (!initialized) return;
             if (collectButton) collectButton.onClick.RemoveListener(Collect);
             if (rationButton) rationButton.onClick.RemoveListener(Ration);
-            if (restart) restart.Clicked -= Restart;
             if (inventoryLabel) Destroy(inventoryLabel.gameObject);
             DestroyItemControls();
             DestroyMouseControls();
