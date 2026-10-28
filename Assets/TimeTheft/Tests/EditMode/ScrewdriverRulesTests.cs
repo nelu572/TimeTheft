@@ -28,7 +28,7 @@ namespace TimeTheft.Tests
         private static TimeTheftMatch NewMatch(Participant actor = Participant.Player, int life = 30,
             int hours = 8, int reduction = 50)
         {
-            return new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = actor, InitialLifeHours = life,
+            return new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = actor, InitialLifeHours = life + 5,
                 MinimumHours = hours, MaximumHours = hours, ExtraRedProbability = 0,
                 ScrewdriverReductionPercent = reduction }, new OrderedRandom());
         }
@@ -73,7 +73,7 @@ namespace TimeTheft.Tests
             Assert.That(match.GetPendingItemEffects(actor), Is.Empty);
             Assert.That(match.HasScrewdriverProtection, Is.True);
             Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
             Assert.That(Enumerable.Range(0, 5).All(i => !match.GetClock(i).Face.HasValue), Is.True);
         }
 
@@ -210,7 +210,7 @@ namespace TimeTheft.Tests
         [Test]
         public void OddMinuteCapFloorsPreventionAndChargesTheRemainingThirtyOneMinutes()
         {
-            var rules = new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, InitialLifeHours = 12, MinimumHours = 1, MaximumHours = 12,
+            var rules = new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, InitialLifeHours = 17, MinimumHours = 1, MaximumHours = 12,
                 ExtraRedProbability = .5f, ScrewdriverReductionPercent = 50 };
             var match = new TimeTheftMatch(rules, new ShrinkThenRecoverRandom());
             var ids = Enumerable.Range(0, 7).Select(_ => TimeTheftItemTestSetup.Give(match, Participant.Player, ItemKind.Screwdriver)).ToArray();
@@ -280,7 +280,7 @@ namespace TimeTheft.Tests
             Assert.That(match.TransferredMinutes, Is.EqualTo(loss));
             Assert.That(match.LastItemEffects.Single().Triggered, Is.True);
             Assert.That(match.LastItemEffects.Single().PreventedMinutes, Is.EqualTo(480 - loss));
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
         }
 
         [Test]
@@ -296,7 +296,7 @@ namespace TimeTheft.Tests
             Assert.That(match.TransferredMinutes, Is.EqualTo(240));
 
             int maximumHours = int.MaxValue / (TimeTheftMatch.ClocksPerBatch * GameTime.MinutesPerHour);
-            var large = NewMatch(life: int.MaxValue / (2 * GameTime.MinutesPerHour), hours: maximumHours);
+            var large = NewMatch(life: int.MaxValue / (2 * GameTime.MinutesPerHour) - 5, hours: maximumHours);
             int largeId = TimeTheftItemTestSetup.Give(large, Participant.Player, ItemKind.Screwdriver);
             StartBatch(large);
             large.UseItem(Participant.Player, largeId);

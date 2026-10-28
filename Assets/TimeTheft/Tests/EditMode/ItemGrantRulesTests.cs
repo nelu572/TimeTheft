@@ -28,7 +28,7 @@ namespace TimeTheft.Tests
         private static Participant Other(Participant owner) => owner == Participant.Player ? Participant.Ai : Participant.Player;
         private static GameRules Rules() => new GameRules
         {
-            EnableAiItemStrategy = false, MinimumHours = 1, MaximumHours = 1, ExtraRedProbability = 0
+            InitialLifeHours = 35, EnableAiItemStrategy = false, MinimumHours = 1, MaximumHours = 1, ExtraRedProbability = 0
         };
         private static int[] Only(ItemKind kind)
         {
@@ -94,7 +94,7 @@ namespace TimeTheft.Tests
                 Assert.That(grant.SkippedCount, Is.Zero);
             }
             Assert.That(match.GetInventory(Participant.Player).Concat(match.GetInventory(Participant.Ai)).Select(item => item.Id).Distinct().Count(), Is.EqualTo(4));
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(6000));
         }
 
         [TestCase(2, 1, 3, 2, 3)]
@@ -181,7 +181,7 @@ namespace TimeTheft.Tests
             Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingItems));
             Assert.That(match.UseItem(Participant.Player, held[1].Id).Failure, Is.EqualTo(ItemUseFailure.AlreadyActive));
             Assert.That(match.GetInventory(Participant.Player).Single().Id, Is.EqualTo(held[1].Id));
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
             match.EndItemPhase(Participant.Player);
             Assert.That(match.UseItem(Participant.Player, held[1].Id).Failure, Is.EqualTo(ItemUseFailure.WrongStage));
             Assert.That(match.LastItemGrants.SelectMany(grant => grant.GrantedItems).Select(item => item.Id), Is.EqualTo(granted));
@@ -218,7 +218,7 @@ namespace TimeTheft.Tests
             Assert.That(match.GetInventory(actor).Count, Is.EqualTo(1));
             Assert.That(match.GetInventory(Other(actor)).Count, Is.EqualTo(1));
             Assert.That(match.GetInventory(actor).Single().Id, Is.GreaterThan(Math.Max(scissors.Id, target.Id)));
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
         }
 
         [TestCase(Participant.Player)]
@@ -401,7 +401,7 @@ namespace TimeTheft.Tests
         public void DisabledGrantsPreserveEmptyAutomaticAAndDoNotGrantAfterGameOver()
         {
             var rules = Rules(); rules.InitialItemCount = 0; rules.ItemsPerBatch = 0;
-            rules.InitialLifeHours = 11;
+            rules.InitialLifeHours = 16;
             var match = NewMatch(rules);
             StartBatch(match);
             Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingClock));
@@ -412,7 +412,7 @@ namespace TimeTheft.Tests
             Assert.That(match.BeginBatch(), Is.False);
             Assert.That(match.CompleteTurn(), Is.False);
             Assert.That(match.LastItemGrants.All(grant => grant.GrantedItems.Count == 0), Is.True);
-            Assert.That(Total(match), Is.EqualTo(1320));
+            Assert.That(Total(match), Is.EqualTo(1920));
         }
 
         [TestCase(-1, 1, 3)]

@@ -32,7 +32,7 @@ namespace TimeTheft.Tests
             public override double NextDouble() => .5;
         }
 
-        private static TimeTheftMatch Prepared(int life = 30, int hours = 1, Participant first = Participant.Player)
+        private static TimeTheftMatch Prepared(int life = 35, int hours = 1, Participant first = Participant.Player)
         {
             var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, InitialLifeHours = life, MinimumHours = hours, MaximumHours = hours,
                 ExtraRedProbability = 0, FirstParticipant = first }, new OrderedRandom());
@@ -56,14 +56,14 @@ namespace TimeTheft.Tests
         }
 
         [Test]
-        public void EqualMandatoryContributionsMoveTwentyHoursAsIntegerMinutesWithoutCreatingTime()
+        public void EqualMandatoryContributionsMoveThirtyHoursFromFiftyPerParticipantWithoutCreatingTime()
         {
             var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(15));
-            Assert.That(TimeTheftMatch.InitialContributionMinutes, Is.EqualTo(600));
-            Assert.That(match.PlayerLifeMinutes, Is.EqualTo(1200));
-            Assert.That(match.AiLifeMinutes, Is.EqualTo(1200));
-            Assert.That(match.BankMinutes, Is.EqualTo(1200));
-            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+            Assert.That(TimeTheftMatch.InitialContributionMinutes, Is.EqualTo(900));
+            Assert.That(match.PlayerLifeMinutes, Is.EqualTo(2100));
+            Assert.That(match.AiLifeMinutes, Is.EqualTo(2100));
+            Assert.That(match.BankMinutes, Is.EqualTo(1800));
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(6000));
         }
 
         [Test]
@@ -71,7 +71,7 @@ namespace TimeTheft.Tests
         {
             for (int seed = 1; seed <= 150; seed++)
             {
-                var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(seed));
+                var match = new TimeTheftMatch(new GameRules { InitialLifeHours = 35, EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(seed));
                 match.BeginBatch();
                 var clocks = Enumerable.Range(0, 5).Select(match.GetClock).ToArray();
                 Assert.That(clocks.All(c => c.Visibility == ClockVisibility.Open && c.Face.HasValue), Is.True);
@@ -84,7 +84,7 @@ namespace TimeTheft.Tests
         [Test]
         public void ShuffleAndClockSelectionHideIdentitiesUntilActionIsCommitted()
         {
-            var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(8));
+            var match = new TimeTheftMatch(new GameRules { InitialLifeHours = 35, EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(8));
             match.BeginBatch();
             Assert.That(match.CommitAction(Participant.Player, TimeAction.Collect), Is.False);
             match.CloseAndShuffle();
@@ -119,7 +119,7 @@ namespace TimeTheft.Tests
         [TestCase(Participant.Ai)]
         public void NormalCollectionMovesOnlyOpponentsLifeToBank(Participant actor)
         {
-            var match = Prepared(30, 6, actor);
+            var match = Prepared(35, 6, actor);
             match.SelectClock(actor, 0);
             match.CommitAction(actor, TimeAction.Collect);
             match.Settle();
@@ -127,25 +127,25 @@ namespace TimeTheft.Tests
             Assert.That(match.TransferredMinutes, Is.EqualTo(360));
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(actor == Participant.Player ? 1200 : 840));
             Assert.That(match.AiLifeMinutes, Is.EqualTo(actor == Participant.Player ? 840 : 1200));
-            Assert.That(match.BankMinutes, Is.EqualTo(1560));
-            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+            Assert.That(match.BankMinutes, Is.EqualTo(2160));
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(4200));
         }
 
         [TestCase(Participant.Player)]
         [TestCase(Participant.Ai)]
         public void RedCollectionMovesOnlyActorsLifeAndHasNoFee(Participant actor)
         {
-            var match = Prepared(30, 6, actor);
+            var match = Prepared(35, 6, actor);
             match.SelectClock(actor, 2);
             match.CommitAction(actor, TimeAction.Collect);
             Assert.That(match.GetClock(2).Face.Value.Kind, Is.EqualTo(ClockKind.Red));
             match.Settle();
             Assert.That(match.TransferParticipant, Is.EqualTo(actor));
             Assert.That(match.TransferredMinutes, Is.EqualTo(360));
-            Assert.That(match.BankMinutes, Is.EqualTo(1560));
+            Assert.That(match.BankMinutes, Is.EqualTo(2160));
             Assert.That(actor == Participant.Player ? match.PlayerLifeMinutes : match.AiLifeMinutes, Is.EqualTo(840));
             Assert.That(actor == Participant.Player ? match.AiLifeMinutes : match.PlayerLifeMinutes, Is.EqualTo(1200));
-            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(4200));
         }
 
         [TestCase(1, 20, "00:20")]
@@ -160,9 +160,9 @@ namespace TimeTheft.Tests
             Assert.That(match.TransferredMinutes, Is.EqualTo(minutes));
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(1200 + minutes));
             Assert.That(match.AiLifeMinutes, Is.EqualTo(1200));
-            Assert.That(match.BankMinutes, Is.EqualTo(1200 - minutes));
+            Assert.That(match.BankMinutes, Is.EqualTo(1800 - minutes));
             Assert.That(GameTime.Format(match.TransferredMinutes), Is.EqualTo(formatted));
-            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(4200));
         }
 
         [TestCase(Participant.Player)]
@@ -175,20 +175,20 @@ namespace TimeTheft.Tests
             Assert.That(match.TransferredMinutes, Is.EqualTo(140));
             Assert.That(actor == Participant.Player ? match.PlayerLifeMinutes : match.AiLifeMinutes, Is.EqualTo(1340));
             Assert.That(actor == Participant.Player ? match.AiLifeMinutes : match.PlayerLifeMinutes, Is.EqualTo(1200));
-            Assert.That(match.BankMinutes, Is.EqualTo(1060));
-            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+            Assert.That(match.BankMinutes, Is.EqualTo(1660));
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(4200));
         }
 
         [Test]
         public void RationCapsAtMinuteBankBalanceIncludingZero()
         {
             var match = Prepared(hours: 7);
-            for (int turn = 0; turn < 8; turn++)
+            for (int turn = 0; turn < 12; turn++)
             {
                 if (match.Stage == TurnStage.BatchComplete) StartBatch(match);
                 Act(match, TimeAction.Ration);
             }
-            Assert.That(match.BankMinutes, Is.EqualTo(80), "140분 배급 8회 후 01:20이 남는다");
+            Assert.That(match.BankMinutes, Is.EqualTo(120), "140분 배급 12회 후 02:00이 남는다");
             StartBatch(match);
             int beforePlayer = match.PlayerLifeMinutes, beforeAi = match.AiLifeMinutes;
             match.SelectClock(Participant.Player, 2);
@@ -196,19 +196,19 @@ namespace TimeTheft.Tests
             match.CommitAction(Participant.Player, TimeAction.Ration);
             Assert.That(match.GetClock(2).Face.Value.Kind, Is.EqualTo(ClockKind.Red));
             match.Settle();
-            Assert.That(match.TransferredMinutes, Is.EqualTo(80));
+            Assert.That(match.TransferredMinutes, Is.EqualTo(120));
             Assert.That(match.TransferParticipant, Is.EqualTo(Participant.Ai));
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(beforePlayer));
-            Assert.That(match.AiLifeMinutes, Is.EqualTo(beforeAi + 80));
+            Assert.That(match.AiLifeMinutes, Is.EqualTo(beforeAi + 120));
             Assert.That(match.BankMinutes, Is.Zero);
-            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(4200));
             match.CompleteTurn();
             match.SelectClock(Participant.Ai, 0);
             match.CommitAction(Participant.Ai, TimeAction.Ration);
             match.Settle();
             Assert.That(match.TransferredMinutes, Is.Zero);
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(beforePlayer));
-            Assert.That(match.AiLifeMinutes, Is.EqualTo(beforeAi + 80));
+            Assert.That(match.AiLifeMinutes, Is.EqualTo(beforeAi + 120));
             Assert.That(match.BankMinutes, Is.Zero);
             Assert.That(match.Winner, Is.EqualTo(GameWinner.None));
             Assert.That(TimeTheftAi.Decide(match.Observe(Participant.Ai), .5, new Random(1)), Is.EqualTo(TimeAction.Collect));
@@ -225,8 +225,8 @@ namespace TimeTheft.Tests
             Assert.That(match.TransferredMinutes, Is.EqualTo(140));
             Assert.That(actor == Participant.Player ? match.PlayerLifeMinutes : match.AiLifeMinutes, Is.EqualTo(beforeOwn));
             Assert.That(actor == Participant.Player ? match.AiLifeMinutes : match.PlayerLifeMinutes, Is.EqualTo(1340));
-            Assert.That(match.BankMinutes, Is.EqualTo(1060));
-            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+            Assert.That(match.BankMinutes, Is.EqualTo(1660));
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(4200));
         }
 
         [Test]
@@ -256,12 +256,12 @@ namespace TimeTheft.Tests
         [Test]
         public void ExcessCollectionEndsImmediatelyAtZeroWithoutAwardingBank()
         {
-            var match = Prepared(11, 12);
+            var match = Prepared(16, 12);
             Act(match, TimeAction.Collect);
             Assert.That(match.TransferredMinutes, Is.EqualTo(60));
             Assert.That(match.AiLifeMinutes, Is.Zero);
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(60));
-            Assert.That(match.BankMinutes, Is.EqualTo(1260));
+            Assert.That(match.BankMinutes, Is.EqualTo(1860));
             Assert.That(match.Stage, Is.EqualTo(TurnStage.GameOver));
             Assert.That(match.Winner, Is.EqualTo(GameWinner.Player));
             Assert.That(match.CompleteTurn(), Is.False);
@@ -272,7 +272,7 @@ namespace TimeTheft.Tests
         [Test]
         public void RedCollectionCanEndActorsLifeWithOnlyRemainingTwentyMinutesMoved()
         {
-            var match = Prepared(11);
+            var match = Prepared(16);
             Act(match, TimeAction.Ration);
             Act(match, TimeAction.Collect);
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(20));
@@ -280,15 +280,15 @@ namespace TimeTheft.Tests
             Assert.That(match.PlayerLifeMinutes, Is.Zero);
             Assert.That(match.TransferredMinutes, Is.EqualTo(20));
             Assert.That(match.Winner, Is.EqualTo(GameWinner.Ai));
-            Assert.That(match.BankMinutes, Is.EqualTo(1260));
+            Assert.That(match.BankMinutes, Is.EqualTo(1860));
             Assert.That(match.AiLifeMinutes, Is.EqualTo(60));
-            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(1320));
+            Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(1920));
         }
 
         [Test]
         public void AiUsesPublicCompositionAndCannotDistinguishHiddenOrders()
         {
-            var rules = new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MinimumHours = 5, MaximumHours = 5, ExtraRedProbability = 0 };
+            var rules = new GameRules { InitialLifeHours = 35, EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MinimumHours = 5, MaximumHours = 5, ExtraRedProbability = 0 };
             for (int seed = 1; seed < 50; seed++)
             {
                 var match = new TimeTheftMatch(rules, new Random(seed));
@@ -296,13 +296,13 @@ namespace TimeTheft.Tests
                 var observed = match.Observe(Participant.Ai);
                 Assert.That(observed.OwnLifeMinutes, Is.EqualTo(1200));
                 Assert.That(observed.OpponentLifeMinutes, Is.EqualTo(1200));
-                Assert.That(observed.BankMinutes, Is.EqualTo(1200));
+                Assert.That(observed.BankMinutes, Is.EqualTo(1800));
                 Assert.That(observed.NormalCount, Is.EqualTo(4));
                 Assert.That(observed.RedCount, Is.EqualTo(1));
                 Assert.That(observed.NormalHours, Is.EqualTo(20));
                 Assert.That(observed.RedHours, Is.EqualTo(5));
                 Assert.That(Enumerable.Range(0, 5).All(i => !match.GetClock(i).Face.HasValue), Is.True);
-                var samePublic = new AiObservation(1200, 1200, 1200, 4, 1, 20, 5);
+                var samePublic = new AiObservation(1200, 1200, 1800, 4, 1, 20, 5);
                 Assert.That(TimeTheftAi.Decide(observed, .5, new Random(71)),
                     Is.EqualTo(TimeTheftAi.Decide(samePublic, .5, new Random(71))));
                 Assert.That(TimeTheftAi.SelectClock(match.GetAvailableClockIndices(), new Random(71)),
@@ -357,7 +357,7 @@ namespace TimeTheft.Tests
         [Test]
         public void NonSequentialSelectionRevealsAndSettlesTheActualClickedClock()
         {
-            var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MinimumHours = 1, MaximumHours = 12,
+            var match = new TimeTheftMatch(new GameRules { InitialLifeHours = 35, EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MinimumHours = 1, MaximumHours = 12,
                 ExtraRedProbability = 0 }, new DistinctHoursRandom());
             match.BeginBatch(); match.CloseAndShuffle(); match.CompleteShuffle();
             Assert.That(match.SelectClock(Participant.Player, 4), Is.True);
@@ -371,14 +371,14 @@ namespace TimeTheft.Tests
             Assert.That(match.TransferredMinutes, Is.EqualTo(600));
             Assert.That(match.AiLifeMinutes, Is.EqualTo(600));
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(1200));
-            Assert.That(match.BankMinutes, Is.EqualTo(1800));
+            Assert.That(match.BankMinutes, Is.EqualTo(2400));
             Assert.That(match.UsedCount, Is.EqualTo(1));
             Assert.That(match.GetClock(0).Visibility, Is.EqualTo(ClockVisibility.Hidden));
             Assert.That(match.GetClock(4).Visibility, Is.EqualTo(ClockVisibility.Used));
             Act(match, TimeAction.Collect, 0);
             Assert.That(match.TransferredMinutes, Is.EqualTo(120));
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(1080));
-            Assert.That(match.BankMinutes, Is.EqualTo(1920));
+            Assert.That(match.BankMinutes, Is.EqualTo(2520));
         }
 
         [TestCase(Participant.Player, 1, 3)]
@@ -450,7 +450,7 @@ namespace TimeTheft.Tests
         {
             for (int seed = 1; seed <= 60; seed++)
             {
-                var match = new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(seed));
+                var match = new TimeTheftMatch(new GameRules { InitialLifeHours = 35, EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0 }, new Random(seed));
                 var ai = new Random(seed ^ 0x51a7);
                 int turns = 0;
                 while (match.Stage != TurnStage.GameOver && turns++ < 2000)
@@ -462,7 +462,7 @@ namespace TimeTheft.Tests
                     Assert.That(match.PlayerLifeMinutes, Is.GreaterThanOrEqualTo(0));
                     Assert.That(match.AiLifeMinutes, Is.GreaterThanOrEqualTo(0));
                     Assert.That(match.BankMinutes, Is.GreaterThanOrEqualTo(0));
-                    Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(3600));
+                    Assert.That(match.PlayerLifeMinutes + match.AiLifeMinutes + match.BankMinutes, Is.EqualTo(4200));
                 }
                 Assert.That(match.Winner, Is.Not.EqualTo(GameWinner.None), "seed=" + seed);
             }
@@ -494,6 +494,7 @@ namespace TimeTheft.Tests
         }
 
         [TestCase(10, 1, 12)]
+        [TestCase(15, 1, 12)]
         [TestCase(0, 1, 12)]
         [TestCase(30, 0, 12)]
         [TestCase(30, 5, 4)]
@@ -506,7 +507,7 @@ namespace TimeTheft.Tests
         public void InitialMinuteTotalAndClockConversionCannotOverflowIntegerStorage()
         {
             Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, InitialLifeHours = int.MaxValue }, new Random()));
-            Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MaximumHours = int.MaxValue }, new Random()));
+            Assert.Throws<ArgumentException>(() => new TimeTheftMatch(new GameRules { InitialLifeHours = 35, EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, MaximumHours = int.MaxValue }, new Random()));
         }
     }
 }

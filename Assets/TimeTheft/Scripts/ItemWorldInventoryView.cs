@@ -22,6 +22,9 @@ namespace TimeTheft
         private System.Collections.ObjectModel.ReadOnlyCollection<ItemWorldView> playerView, opponentView;
         private Action<int> select;
         private bool? opponentKindsVisible;
+        private int pendingCuts;
+        internal void BeginCutPresentation() => pendingCuts++;
+        internal void EndCutPresentation() { pendingCuts = Mathf.Max(0, pendingCuts - 1); }
         private TMPro.TMP_FontAsset labelFont;
         public void SetLabelFont(TMPro.TMP_FontAsset font) => labelFont = font;
 
@@ -160,6 +163,8 @@ namespace TimeTheft
 
         private void Layout(List<ItemWorldView> items)
         {
+            // 절단 대상은 원래 자리에 남고, 회수 완료 뒤 보유품을 다시 정렬한다.
+            if (pendingCuts > 0) return;
             if (items.Count > 0 && items.Exists(item => item.ModelPresentation))
             {
                 float cursor = 0, mean = 0;
@@ -196,6 +201,7 @@ namespace TimeTheft
 
         public void ResetItems()
         {
+            pendingCuts = 0;
             if (modelUses) modelUses.ResetAll();
             Clear(playerItems);
             Clear(opponentItems);

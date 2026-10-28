@@ -15,7 +15,7 @@ namespace TimeTheft.Tests
 
         private static TimeTheftMatch NewMatch(Participant actor = Participant.Player, int life = 30)
         {
-            return new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = actor, InitialLifeHours = life,
+            return new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = actor, InitialLifeHours = life + 5,
                 MinimumHours = 8, MaximumHours = 8, ExtraRedProbability = 0 }, new OrderedRandom());
         }
 
@@ -93,7 +93,7 @@ namespace TimeTheft.Tests
             Assert.That(match.HasSpareKeyReadiness, Is.False);
             Assert.That(match.GetCurrentItemEffects(actor), Is.Empty);
             Assert.That(match.UsedCount, Is.EqualTo(1));
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
         }
 
         [TestCase(Participant.Player)]
@@ -120,7 +120,7 @@ namespace TimeTheft.Tests
             Assert.That(match.GetAvailableClockIndices().Contains(0), Is.True);
             Assert.That(match.GetAvailableClockIndices().Contains(2), Is.False);
             Assert.That(match.UsedCount, Is.EqualTo(1));
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
         }
 
         [Test]
@@ -143,7 +143,7 @@ namespace TimeTheft.Tests
             Assert.That(match.GetPrivateClock(Participant.Player, 0).HasValue, Is.True);
             Assert.That(match.GetPrivateClock(Participant.Player, -1), Is.Null);
             Assert.That(match.GetPrivateClock((Participant)99, 0), Is.Null);
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
             Assert.That(match.KeepPeekedClock(Participant.Player), Is.True);
         }
 
@@ -251,12 +251,12 @@ namespace TimeTheft.Tests
             FinishSelected(match, TimeAction.Collect);
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(red ? 960 : 1440));
             Assert.That(match.AiLifeMinutes, Is.EqualTo(red ? 1320 : 720));
-            Assert.That(match.BankMinutes, Is.EqualTo(red ? 1320 : 1440));
+            Assert.That(match.BankMinutes, Is.EqualTo(red ? 1920 : 2040));
             Assert.That(match.LastItemEffects.Single(effect => effect.Source.Kind == ItemKind.Screwdriver).PreventedMinutes,
                 Is.EqualTo(red ? 240 : 0));
             Assert.That(match.LastItemEffects.Single(effect => effect.Source.Kind == ItemKind.TimeBypass).BypassedMinutes,
                 Is.EqualTo(red ? 120 : 240));
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
         }
 
         [Test]
