@@ -259,8 +259,9 @@ namespace TimeTheft.Tests
             yield return Wait(() => World.PlayerItems.Count == 1);
             yield return AcquisitionsReady();
             var model = World.PlayerItems.Single().ModelPresentation;
+            yield return Wait(() => !game.IsFlowBlocked && game.Match.Stage == TurnStage.AwaitingItems);
             game.UseItem(driver);
-            yield return Wait(() => !game.IsPresentingItem);
+            yield return Wait(() => !game.IsPresentingItem && !game.IsFlowBlocked);
             int red = ReferenceClock(ClockKind.Red);
             game.SelectClock(red);
             yield return GameUiTestInput.ClockMotionReady(game);
@@ -304,7 +305,9 @@ namespace TimeTheft.Tests
                         if (item.ModelPresentation) item.ModelPresentation.PlaybackSpeed = 50;
                 yield return null;
             }
-            Assert.That(condition(), Is.True, "M410 이벤트 통합 상태 대기 시간 초과");
+            Assert.That(condition(), Is.True, "M410 이벤트 통합 상태 대기 시간 초과: " + game.Match.Stage +
+                ", flow=" + game.IsFlowBlocked + ", item=" + game.IsPresentingItem + ", clock=" + game.IsPresentingClock +
+                ", preparing=" + World.ModelUses.IsPreparing + ", acquiring=" + World.ModelUses.IsAcquiring);
         }
         private IEnumerator ClickWorldClock(int index)
         {

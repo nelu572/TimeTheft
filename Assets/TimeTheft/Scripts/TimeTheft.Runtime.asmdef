@@ -1,4 +1,4 @@
 {
   "name": "TimeTheft.Runtime",
-  "references": ["Unity.TextMeshPro", "Unity.ugui", "Unity.InputSystem", "TimeTheft.ItemPresentation"]
+  "references": ["Unity.TextMeshPro", "Unity.ugui", "Unity.InputSystem", "TimeTheft.ItemPresentation", "TimeTheft.TitleScreen", "Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.Universal.Runtime"]
 }

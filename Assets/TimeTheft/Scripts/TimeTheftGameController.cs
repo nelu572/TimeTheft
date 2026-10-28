@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 namespace TimeTheft
 {
@@ -11,6 +12,7 @@ namespace TimeTheft
     {
         [SerializeField] private TimeTheftSettings settings;
         private TimeTheftGameView view;
+        private TimeTheftResultPresentation resultPresentation;
         private System.Random aiRandom;
         private bool skipRequested;
         private bool selectingClock;
@@ -34,6 +36,8 @@ namespace TimeTheft
             view.InitializeMouseControls(SkipAnimation);
             flowNotice = gameObject.AddComponent<TimeTheftFlowNotice>();
             flowNotice.Initialize(view);
+            resultPresentation = view.ResultPresentation;
+            resultPresentation.Initialize(this, view, RequestMainMenu);
             RestartGame();
         }
 
@@ -42,7 +46,6 @@ namespace TimeTheft
             var keyboard = Keyboard.current;
             if (keyboard == null || !view) return;
             if (keyboard.hKey.wasPressedThisFrame) view.ToggleHelp();
-            if (keyboard.rKey.wasPressedThisFrame) RequestRestart();
             if (keyboard.spaceKey.wasPressedThisFrame) SkipAnimation();
             if (IsFlowBlocked || IsPresentingItem || selectingClock) return;
             if (Match != null && Match.Stage == TurnStage.AwaitingKeyDecision && Match.ActiveParticipant == Participant.Player)
@@ -59,11 +62,18 @@ namespace TimeTheft
         public void RequestRestart()
         {
             if (!isActiveAndEnabled || Match == null || Match.Stage != TurnStage.GameOver ||
-                !view || !view.IsResultVisible) return;
+                !view || !view.IsResultVisible || !resultPresentation.CanLeaveResult) return;
             RestartGame();
         }
 
-        // 초기 시작·실행용 테스트 사본의 초기화. 사용자 입력은 RequestRestart를 거친다.
+        public void RequestMainMenu()
+        {
+            if (!isActiveAndEnabled || Match == null || Match.Stage != TurnStage.GameOver ||
+                !view || !view.IsResultVisible || !resultPresentation.CanLeaveResult) return;
+            SceneManager.LoadScene("Assets/TimeTheft/TitleScreen/Scenes/TimeTheftTitle.unity", LoadSceneMode.Single);
+        }
+
+        // 초기 시작·실행용 테스트 사본의 초기화. 결과 버튼은 RequestMainMenu로 복귀한다.
         public void RestartGame()
         {
             if (!isActiveAndEnabled || !view) return;
@@ -78,6 +88,7 @@ namespace TimeTheft
             aiRandom = new System.Random(seed ^ 0x51a7);
             view.ConfigureItemRules(settings.Rules);
             view.ResetTable(Match);
+            resultPresentation.ResetForMatch(Match);
             StartCoroutine(DealBatch());
         }
 
@@ -375,7 +386,12 @@ namespace TimeTheft
                 else yield return motion.ReturnToLegacy();
             }
             if (view.WorldItems.ModelUses) yield return view.WorldItems.ModelUses.WaitForTransitions();
-            if (Match.Stage == TurnStage.GameOver) { view.Result(Match); yield break; }
+            if (Match.Stage == TurnStage.GameOver)
+            {
+                yield return resultPresentation.PlayEnding(Match.Winner);
+                view.Result(Match);
+                yield break;
+            }
             Match.CompleteTurn();
             if (motion) motion.Cancel();
             if (Match.Stage == TurnStage.BatchComplete)
@@ -429,6 +445,7 @@ namespace TimeTheft
 
         public void SkipAnimation()
         {
+            if (resultPresentation && resultPresentation.IsEnding) { resultPresentation.SkipEnding(); return; }
             if (!CanSkipAnimation) return;
             if (view.WorldItems.ModelUses) view.WorldItems.ModelUses.SkipMotion();
             var lifecycle = view.Lifecycle;
