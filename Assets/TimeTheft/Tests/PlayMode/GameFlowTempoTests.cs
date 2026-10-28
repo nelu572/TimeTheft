@@ -145,6 +145,46 @@ namespace TimeTheft.Tests
         }
 
         [UnityTest]
+        public IEnumerator InventoryRecentersOnlyAfterEachItemUseMotionFinishes()
+        {
+            foreach (var kind in new[] { ItemKind.RubberDuck, ItemKind.Scissors, ItemKind.SpareKey,
+                ItemKind.Screwdriver, ItemKind.TimeBypass, ItemKind.Handcuffs })
+            {
+                controller.RestartGame();
+                int usedId = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, kind);
+                TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.Screwdriver);
+                TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.SpareKey);
+                foreach (var held in new[] { ItemKind.Screwdriver, ItemKind.SpareKey, ItemKind.TimeBypass })
+                    TimeTheftItemTestSetup.Give(controller.Match, Participant.Ai, held);
+                yield return Wait(() => PlayerReady && !World.ModelUses.IsAcquiring);
+                SpeedItems(4);
+                var positions = World.PlayerItems.Concat(World.OpponentItems)
+                    .ToDictionary(item => item, item => item.transform.position);
+                controller.UseItem(usedId);
+                Assert.That(controller.IsPresentingItem, Is.True, kind.ToString());
+                int samples = 0;
+                float deadline = Time.realtimeSinceStartup + 20;
+                while (World.ModelUses.IsTransitioning && Time.realtimeSinceStartup < deadline)
+                {
+                    foreach (var remaining in World.PlayerItems.Concat(World.OpponentItems))
+                        Assert.That(Vector3.Distance(remaining.transform.position, positions[remaining]),
+                            Is.LessThan(.001f), kind + " 사용 모션 중에는 남은 보유품 위치를 유지한다");
+                    samples++;
+                    yield return null;
+                }
+                Assert.That(samples, Is.GreaterThan(0), kind + " 실제 사용 모션을 검사한다");
+                yield return Wait(() => !controller.IsPresentingItem);
+                Assert.That(World.PlayerItems.Count, Is.EqualTo(2));
+                Assert.That(Mathf.Abs(World.PlayerItems.Average(item => item.transform.position.x)),
+                    Is.LessThan(.001f), kind + " 사용 모션 완료 후 중앙 정렬한다");
+                Assert.That(World.PlayerItems.Any(item => Vector3.Distance(item.transform.position,
+                    positions[item]) > .01f), Is.True, kind + " 사용 후 남은 보유품의 배치를 갱신한다");
+                Assert.That(Mathf.Abs(World.OpponentItems.Average(item => item.transform.position.x)),
+                    Is.LessThan(.001f), kind + " 상대 보유품도 완료 후 중앙 정렬한다");
+            }
+        }
+
+        [UnityTest]
         public IEnumerator ScissorsKeepVictimAndRemainingPositionsUntilImpactAndFinishBeforeNextInput()
         {
             int scissors = TimeTheftItemTestSetup.Give(controller.Match, Participant.Player, ItemKind.Scissors);

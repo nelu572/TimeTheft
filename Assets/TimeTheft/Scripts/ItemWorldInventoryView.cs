@@ -163,8 +163,8 @@ namespace TimeTheft
 
         private void Layout(List<ItemWorldView> items)
         {
-            // 절단 대상은 원래 자리에 남고, 회수 완료 뒤 보유품을 다시 정렬한다.
-            if (pendingCuts > 0) return;
+            // 사용 모션과 절단·회수가 끝난 뒤 남은 보유품을 중앙 정렬한다.
+            if (pendingCuts > 0 || modelUses && modelUses.IsTransitioning) return;
             if (items.Count > 0 && items.Exists(item => item.ModelPresentation))
             {
                 float cursor = 0, mean = 0;
