@@ -124,6 +124,72 @@ namespace TimeTheft.Tests
         }
 
         [UnityTest]
+        public IEnumerator LifeLossReactionWaitsForCounterThenHitsOnceAndClearsOnRecoveryOrRestart()
+        {
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 6;
+            controller.RestartGame();
+            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingClock &&
+                !controller.View.Lifecycle.IsRunning && !controller.View.WorldItems.ModelUses.IsAcquiring);
+            controller.StopAllCoroutines();
+            var match = controller.Match;
+            // 테스트 마우스의 자유 시차를 고정해 후처리 자체가 카메라를 움직이는지 확인한다.
+            controller.View.FocusCamera.BeginPresentationCamera();
+            var originalCamera = controller.View.FocusCamera.transform.localPosition;
+            int first = ClockOfKind(ClockKind.Normal);
+            Settle(match, first, TimeAction.Collect); // 상대 손실에는 반응하지 않는다.
+            controller.View.BeginTransfer(match); controller.View.NumbersFrame(1);
+            yield return new WaitForSecondsRealtime(.2f);
+            Assert.That(presentation.DamageReaction, Is.Zero);
+            Assert.That(presentation.PressureVolume.weight, Is.Zero);
+
+            match.CompleteTurn();
+            int second = ClockOfKind(ClockKind.Normal, first);
+            Settle(match, second, TimeAction.Collect);
+            controller.View.BeginTransfer(match); controller.View.NumbersFrame(.5f);
+            yield return new WaitForSecondsRealtime(.15f);
+            Assert.That(presentation.DamageReaction, Is.Zero, "계수기 감소 도중에는 먼저 반응하지 않는다");
+            controller.View.NumbersFrame(1);
+            float finishedAt = Time.unscaledTime;
+            Assert.That(presentation.DamageReaction, Is.Zero, "감소 완료 뒤 짧게 늦춰서 시작한다");
+            yield return WaitFor(() => presentation.DamageReaction > .5f);
+            Assert.That(presentation.Pressure, Is.Zero, "HP 70%에서도 손실 순간은 분명히 전달한다");
+            presentation.PressureVolume.sharedProfile.TryGet<LensDistortion>(out var lens);
+            presentation.PressureVolume.sharedProfile.TryGet<ChromaticAberration>(out var aberration);
+            Assert.That(lens.intensity.value, Is.LessThan(-.007f).And.GreaterThanOrEqualTo(-.015f));
+            Assert.That(lens.scale.value, Is.GreaterThan(1.005f).And.LessThanOrEqualTo(1.012f));
+            Assert.That(aberration.intensity.value, Is.GreaterThan(.15f));
+            Assert.That(controller.View.FocusCamera.transform.localPosition, Is.EqualTo(originalCamera));
+            var counterBlock = new MaterialPropertyBlock();
+            controller.View.PlayerLife.GetComponent<Renderer>().GetPropertyBlock(counterBlock);
+            Assert.That(counterBlock.GetFloat(Shader.PropertyToID("_GlowIntensity")), Is.Zero, "후처리 전 발광 잔상이 선명한 숫자와 어긋나지 않게 한다");
+            Capture("damage-reaction-peak");
+
+            // Animate의 완료 프레임 중복 호출은 같은 손실을 다시 재생하지 않는다.
+            controller.View.NumbersFrame(1); controller.View.NumbersFrame(1);
+            yield return WaitFor(() => presentation.DamageReaction == 0);
+            Assert.That(Time.unscaledTime - finishedAt, Is.LessThan(.9f));
+            Assert.That(presentation.PressureVolume.weight, Is.Zero);
+            Assert.That(lens.intensity.overrideState || lens.scale.overrideState, Is.False);
+            controller.View.FocusCamera.EndPresentationCamera();
+            yield return new WaitForSecondsRealtime(.15f);
+            Assert.That(presentation.DamageReaction, Is.Zero);
+
+            match.CompleteTurn();
+            int third = ClockOfKind(ClockKind.Normal, first, second);
+            Settle(match, third, TimeAction.Ration);
+            controller.View.BeginTransfer(match); controller.View.NumbersFrame(1);
+            yield return new WaitForSecondsRealtime(.2f);
+            Assert.That(presentation.DamageReaction, Is.Zero, "수명 회복에는 손실 반응을 재생하지 않는다");
+
+            match.CompleteTurn();
+            Settle(match, ClockOfKind(ClockKind.Normal, first, second, third), TimeAction.Collect);
+            controller.View.BeginTransfer(match); controller.View.NumbersFrame(1);
+            controller.RestartGame();
+            yield return new WaitForSecondsRealtime(.25f);
+            AssertRestored();
+        }
+
+        [UnityTest]
         public IEnumerator VictoryFollowsFinalSettlementAndShowsClearResultWithinThreeSeconds()
         {
             yield return Finish(ClockKind.Normal);
@@ -141,7 +207,7 @@ namespace TimeTheft.Tests
             Assert.That(presentation.Heading.text, Is.EqualTo("승리"));
             Assert.That(presentation.PressureVolume.weight, Is.Zero);
             Assert.That(controller.Match, Is.SameAs(match));
-            Assert.That(presentation.CanRestart, Is.True);
+            Assert.That(presentation.CanLeaveResult, Is.True);
             Capture("victory");
             yield return new WaitForSecondsRealtime(.15f);
             controller.RestartGame();
@@ -149,7 +215,7 @@ namespace TimeTheft.Tests
         }
 
         [UnityTest]
-        public IEnumerator DefeatSkipCannotRestartUntilInputReleasedAndRestartButtonRestoresScene()
+        public IEnumerator DefeatSkipCannotLeaveUntilInputReleasedAndMainMenuButtonLoadsTitle()
         {
             yield return Finish(ClockKind.Red);
             var finalMatch = controller.Match;
@@ -159,34 +225,29 @@ namespace TimeTheft.Tests
             yield return WaitFor(() => presentation.IsVisible);
             yield return new WaitForSecondsRealtime(.3f);
             Assert.That(presentation.Heading.text, Is.EqualTo("패배"));
-            Assert.That(presentation.CanRestart, Is.False);
-            controller.RequestRestart();
+            Assert.That(presentation.CanLeaveResult, Is.False);
+            controller.RequestMainMenu();
             Assert.That(controller.Match, Is.SameAs(finalMatch), "스킵/재시작 키를 유지해도 다음 게임으로 넘어가지 않는다");
             Assert.That(presentation.PressureVolume.weight, Is.Zero);
             Capture("defeat");
             yield return new WaitForSecondsRealtime(.15f);
 
             input.Release(keyboard.spaceKey); input.Release(keyboard.rKey); InputSystem.Update();
-            yield return WaitFor(() => presentation.CanRestart);
+            yield return WaitFor(() => presentation.CanLeaveResult);
             // 타이틀 버튼의 기존 0.1초 눌림 연출을 포함해 실제 포인터를 제출한다.
-            yield return GameUiTestInput.Ready(presentation.RestartButton);
-            GameUiTestInput.Point(input, mouse, presentation.RestartButton);
+            Assert.That(presentation.MainMenuButton.GetComponentInChildren<TMPro.TMP_Text>().text, Is.EqualTo("메인으로"));
+            Assert.That(presentation.MainMenuButton.transform.parent.Find("Restart Hint"), Is.Null);
+            yield return GameUiTestInput.Ready(presentation.MainMenuButton);
+            GameUiTestInput.Point(input, mouse, presentation.MainMenuButton);
             int submitted = 0;
-            presentation.RestartButton.onClick.AddListener(() => submitted++);
+            presentation.MainMenuButton.onClick.AddListener(() => submitted++);
             input.Press(mouse.leftButton); GameUiTestInput.Process();
             yield return null;
             Assert.That(controller.Match, Is.SameAs(finalMatch));
             input.Release(mouse.leftButton); GameUiTestInput.Process();
-            yield return WaitFor(() => controller.Match != finalMatch);
+            yield return WaitFor(() => SceneManager.GetActiveScene().path == "Assets/TimeTheft/TitleScreen/Scenes/TimeTheftTitle.unity");
             Assert.That(submitted, Is.EqualTo(1));
-            AssertRestored();
-
-            // 중간 취소도 같은 복구 경로를 사용한다.
-            controller.StopAllCoroutines();
-            controller.StartCoroutine(presentation.PlayEnding(GameWinner.Ai));
-            yield return new WaitForSecondsRealtime(.7f);
-            controller.enabled = false;
-            AssertRestored();
+            Assert.That(UnityEngine.Object.FindFirstObjectByType<TimeTheftGameController>(), Is.Null);
         }
 
         private IEnumerator Finish(ClockKind kind)
@@ -202,12 +263,12 @@ namespace TimeTheft.Tests
             yield return WaitFor(() => presentation.IsEnding);
         }
 
-        private int ClockOfKind(ClockKind kind, int excluded = -1, int excluded2 = -1)
+        private int ClockOfKind(ClockKind kind, params int[] excluded)
         {
             // 독립 모델은 테스트 오라클이다. 런타임의 비공개 시계 API를 넓히지 않는다.
             for (int index = 0; index < 5; index++)
             {
-                if (index == excluded || index == excluded2) continue;
+                if (Array.IndexOf(excluded, index) >= 0) continue;
                 var reference = new TimeTheftMatch(settings.Rules, new System.Random(settings.RandomSeed));
                 reference.BeginBatch(); reference.CloseAndShuffle(); reference.CompleteShuffle();
                 if (reference.Stage == TurnStage.AwaitingItems) reference.EndItemPhase(Participant.Player); reference.SelectClock(Participant.Player, index);
@@ -230,6 +291,7 @@ namespace TimeTheft.Tests
         {
             Assert.That(presentation.IsEnding || presentation.IsVisible, Is.False);
             Assert.That(presentation.Pressure, Is.Zero);
+            Assert.That(presentation.DamageReaction, Is.Zero);
             Assert.That(presentation.PressureVolume.weight, Is.Zero);
             if (!controller.enabled) Assert.That(controller.View.FocusCamera.IsPresentationCameraOwned, Is.False);
             for (int i = 0; i < lights.Length; i++)

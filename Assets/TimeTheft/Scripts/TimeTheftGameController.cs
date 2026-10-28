@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 namespace TimeTheft
 {
@@ -29,7 +30,7 @@ namespace TimeTheft
             view.InitializeItemControls(SelectItem, UseSelectedItem, EndItemPhase, KeepPeekedClock);
             view.InitializeMouseControls(SkipAnimation);
             resultPresentation = view.ResultPresentation;
-            resultPresentation.Initialize(this, view, RequestRestart);
+            resultPresentation.Initialize(this, view, RequestMainMenu);
             RestartGame();
         }
 
@@ -38,7 +39,6 @@ namespace TimeTheft
             var keyboard = Keyboard.current;
             if (keyboard == null || !view) return;
             if (keyboard.hKey.wasPressedThisFrame) view.ToggleHelp();
-            if (keyboard.rKey.wasPressedThisFrame) RequestRestart();
             if (keyboard.spaceKey.wasPressedThisFrame) SkipAnimation();
             if (Match != null && Match.Stage == TurnStage.AwaitingKeyDecision && Match.ActiveParticipant == Participant.Player)
             {
@@ -54,11 +54,18 @@ namespace TimeTheft
         public void RequestRestart()
         {
             if (!isActiveAndEnabled || Match == null || Match.Stage != TurnStage.GameOver ||
-                !view || !view.IsResultVisible || !resultPresentation.CanRestart) return;
+                !view || !view.IsResultVisible || !resultPresentation.CanLeaveResult) return;
             RestartGame();
         }
 
-        // 초기 시작·실행용 테스트 사본의 초기화. 사용자 입력은 RequestRestart를 거친다.
+        public void RequestMainMenu()
+        {
+            if (!isActiveAndEnabled || Match == null || Match.Stage != TurnStage.GameOver ||
+                !view || !view.IsResultVisible || !resultPresentation.CanLeaveResult) return;
+            SceneManager.LoadScene("Assets/TimeTheft/TitleScreen/Scenes/TimeTheftTitle.unity", LoadSceneMode.Single);
+        }
+
+        // 초기 시작·실행용 테스트 사본의 초기화. 결과 버튼은 RequestMainMenu로 복귀한다.
         public void RestartGame()
         {
             if (!isActiveAndEnabled || !view) return;

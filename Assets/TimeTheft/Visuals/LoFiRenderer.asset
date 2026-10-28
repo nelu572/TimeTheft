@@ -158,5 +158,5 @@ MonoBehaviour:
   colorLevels: 48
   dithering: 0.45
   noise: 0.008
-  shadowRecovery: 0.055
-  sceneIntensity: 0.985
+  shadowRecovery: 0.08
+  sceneIntensity: 1

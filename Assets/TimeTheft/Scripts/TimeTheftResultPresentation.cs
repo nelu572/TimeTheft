@@ -35,29 +35,30 @@ namespace TimeTheft
         private GameObject overlay;
         private CanvasGroup content;
         private UnityEngine.UI.Image shade;
-        private UnityEngine.UI.Button restartButton, skipButton;
+        private UnityEngine.UI.Button mainMenuButton, skipButton;
         private TextMeshProUGUI heading, balance, caption;
         private TMP_FontAsset resultFont;
-        private int initialLife, previousLife, shownFrame, armedFrame;
-        private float damagePulse, shownAt;
-        private bool initialized, skip, endingComplete, ownsCamera;
-        private Action restartGame;
+        private int initialLife, shownFrame, armedFrame;
+        private float damageStartsAt, damageStrength, shownAt;
+        private bool initialized, skip, endingComplete, ownsCamera, damageGlowMuted;
+        private Action returnToMainMenu;
         private static readonly int GlowId = Shader.PropertyToID("_GlowIntensity");
 
         public bool IsEnding { get; private set; }
         public bool IsVisible { get; private set; }
-        public bool CanRestart => IsVisible && restartButton && restartButton.interactable && Time.frameCount > armedFrame;
+        public bool CanLeaveResult => IsVisible && mainMenuButton && mainMenuButton.interactable && Time.frameCount > armedFrame;
         public float Pressure { get; private set; }
+        public float DamageReaction { get; private set; }
         public Volume PressureVolume => pressureVolume;
-        public UnityEngine.UI.Button RestartButton => restartButton;
+        public UnityEngine.UI.Button MainMenuButton => mainMenuButton;
         public TMP_Text Heading => heading;
 
-        public void Initialize(TimeTheftGameController owner, TimeTheftGameView gameView, Action restart)
+        public void Initialize(TimeTheftGameController owner, TimeTheftGameView gameView, Action mainMenu)
         {
             if (initialized) return;
             if (!sourceVolume || !sourceVolume.sharedProfile || !theme)
                 throw new InvalidOperationException("결과 연출의 기존 Volume과 타이틀 테마를 연결하세요.");
-            controller = owner; view = gameView; restartGame = restart;
+            controller = owner; view = gameView; returnToMainMenu = mainMenu;
             var baseline = sourceVolume.sharedProfile;
             baseChromatic = baseline.TryGet<ChromaticAberration>(out var ca) ? ca.intensity.value : 0;
             baseVignette = baseline.TryGet<Vignette>(out var vi) ? vi.intensity.value : 0;
@@ -106,7 +107,6 @@ namespace TimeTheft
         {
             ResetPresentation();
             initialLife = Mathf.Max(1, match.PlayerLifeMinutes);
-            previousLife = match.PlayerLifeMinutes;
         }
 
         // 각 경계에서 연속이며 회복 시 같은 경로를 되짚는다.
@@ -125,23 +125,20 @@ namespace TimeTheft
             if (IsVisible)
             {
                 content.alpha = Mathf.MoveTowards(content.alpha, 1, Time.unscaledDeltaTime / .22f);
-                // 스킵의 press/release와 UI Submit이 다시하기에 재사용되지 않게 모두 놓은 뒤 무장한다.
-                if (!restartButton.interactable && Time.frameCount > shownFrame + 1 &&
+                // 스킵의 press/release와 UI Submit이 메인 이동에 재사용되지 않게 모두 놓은 뒤 무장한다.
+                if (!mainMenuButton.interactable && Time.frameCount > shownFrame + 1 &&
                     Time.unscaledTime - shownAt >= .15f && !InputHeld())
-                { restartButton.interactable = true; armedFrame = Time.frameCount; }
+                { mainMenuButton.interactable = true; armedFrame = Time.frameCount; }
                 return;
             }
             if (IsEnding || endingComplete || controller.Match == null || !controller.isActiveAndEnabled) return;
             int life = controller.Match.PlayerLifeMinutes;
             float ratio = life / (float)initialLife;
-            if (life < previousLife && ratio < .15f) damagePulse = .18f;
-            previousLife = life;
             float target = EvaluatePressure(ratio);
             Pressure = Mathf.Lerp(Pressure, target, 1 - Mathf.Exp(-Time.unscaledDeltaTime / .35f));
             if (Mathf.Abs(Pressure - target) < .0001f) Pressure = target;
-            damagePulse = Mathf.Max(0, damagePulse - Time.unscaledDeltaTime);
-            float pulse = .18f * Mathf.Sin(Mathf.PI * damagePulse / .18f);
-            ApplyEffects(Pressure, pulse);
+            UpdateDamageReaction();
+            ApplyEffects(Pressure, 0, DamageReaction);
         }
 
         private static bool InputHeld()
@@ -152,20 +149,52 @@ namespace TimeTheft
                     keys.enterKey.isPressed || keys.numpadEnterKey.isPressed));
         }
 
-        private void ApplyEffects(float strength, float collapse = 0)
+        // 표시된 수명 감소가 끝난 뒤 한 번만 반응한다. 작은 손실도 인지 가능한 강도를 보장한다.
+        public void ReactToLifeLoss(int lostMinutes)
         {
-            pressureVolume.weight = strength > 0 || collapse > 0 ? 1 : 0;
-            chromatic.intensity.value = baseChromatic + .14f * strength + .14f * collapse;
-            vignette.intensity.value = Mathf.Min(.55f, baseVignette + .16f * strength + .16f * collapse);
-            grading.saturation.value = baseSaturation - 12 * strength - 8 * collapse;
-            grading.colorFilter.value = Color.Lerp(baseFilter, baseFilter * new Color(.9f, .95f, 1, 1), strength);
-            distortion.intensity.overrideState = collapse > 0;
-            distortion.intensity.value = -.025f * collapse;
+            if (!initialized || !isActiveAndEnabled || IsEnding || endingComplete || IsVisible || lostMinutes <= 0) return;
+            damageStrength = Mathf.Lerp(.65f, 1, Mathf.Clamp01(lostMinutes / (initialLife * .25f)));
+            damageStartsAt = Time.unscaledTime + .08f;
+            DamageReaction = 0;
+        }
+
+        private void UpdateDamageReaction()
+        {
+            if (damageStrength <= 0) return;
+            float elapsed = Time.unscaledTime - damageStartsAt;
+            if (elapsed < 0) DamageReaction = 0;
+            else if (elapsed < .055f) DamageReaction = damageStrength * Mathf.SmoothStep(0, 1, elapsed / .055f);
+            else if (elapsed < .10f) DamageReaction = damageStrength;
+            else if (elapsed < .50f) DamageReaction = damageStrength * (1 - Mathf.SmoothStep(0, 1, (elapsed - .10f) / .40f));
+            else CancelDamageReaction();
+            // 발광 패스는 후처리 전, 선명한 숫자는 후처리 후 그려진다. 반응 중 잔상만 억제한다.
+            if (DamageReaction > 0) { SetGlowMultiplier(0); damageGlowMuted = true; }
+        }
+
+        private void CancelDamageReaction()
+        {
+            damageStrength = damageStartsAt = DamageReaction = 0;
+            if (damageGlowMuted) RestoreGlow();
+            damageGlowMuted = false;
+        }
+
+        private void ApplyEffects(float strength, float collapse = 0, float hit = 0)
+        {
+            pressureVolume.weight = strength > 0 || collapse > 0 || hit > 0 ? 1 : 0;
+            chromatic.intensity.value = Mathf.Min(.38f, baseChromatic + .14f * strength + .14f * collapse + .20f * hit);
+            vignette.intensity.value = Mathf.Min(.55f, baseVignette + .16f * strength + .16f * collapse + .08f * hit);
+            grading.saturation.value = baseSaturation - 12 * strength - 8 * collapse - 18 * hit;
+            grading.colorFilter.value = Color.Lerp(baseFilter, baseFilter * new Color(.9f, .95f, 1, 1), Mathf.Clamp01(strength + .45f * hit));
+            distortion.intensity.overrideState = collapse > 0 || hit > 0;
+            distortion.intensity.value = -.025f * collapse - .015f * hit;
+            distortion.scale.overrideState = hit > 0;
+            distortion.scale.value = 1 + .012f * hit;
         }
 
         public IEnumerator PlayEnding(GameWinner winner)
         {
             if (!initialized || IsEnding || endingComplete || IsVisible || winner == GameWinner.None) yield break;
+            CancelDamageReaction();
             IsEnding = true; skip = false;
             view.PrepareResultPresentation();
             view.FocusCamera.BeginPresentationCamera(); ownsCamera = true;
@@ -200,6 +229,7 @@ namespace TimeTheft
         public void ShowResult(TimeTheftMatch match)
         {
             if (!initialized || IsVisible) return;
+            CancelDamageReaction();
             IsVisible = true;
             bool won = match.Winner == GameWinner.Player;
             heading.text = won ? "승리" : "패배";
@@ -211,7 +241,7 @@ namespace TimeTheft
             overlay.SetActive(true);
             SetShade(.82f);
             content.gameObject.SetActive(true); content.alpha = 0;
-            restartButton.interactable = false;
+            mainMenuButton.interactable = false;
             shownFrame = armedFrame = Time.frameCount; shownAt = Time.unscaledTime;
             if (EventSystem.current) EventSystem.current.SetSelectedGameObject(null);
         }
@@ -226,13 +256,15 @@ namespace TimeTheft
                 }
         }
 
-        private void SetGlow(float amount)
+        private void SetGlow(float amount) => SetGlowMultiplier(1 + .45f * amount);
+
+        private void SetGlowMultiplier(float multiplier)
         {
             for (int i = 0; i < counters.Length; i++)
             {
                 if (!counters[i] || baseGlow[i] == 0) continue;
                 counters[i].GetPropertyBlock(glowBlock);
-                glowBlock.SetFloat(GlowId, baseGlow[i] * (1 + .45f * amount));
+                glowBlock.SetFloat(GlowId, baseGlow[i] * multiplier);
                 counters[i].SetPropertyBlock(glowBlock);
             }
         }
@@ -250,10 +282,11 @@ namespace TimeTheft
         {
             if (!initialized) return;
             IsEnding = IsVisible = endingComplete = skip = false;
-            Pressure = damagePulse = 0;
+            Pressure = 0;
+            CancelDamageReaction();
             ApplyEffects(0); SetLights(1, 0); RestoreGlow();
             content.gameObject.SetActive(false); content.alpha = 0;
-            restartButton.interactable = false; skipButton.gameObject.SetActive(false);
+            mainMenuButton.interactable = false; skipButton.gameObject.SetActive(false);
             overlay.SetActive(false);
             if (ownsCamera && view && view.FocusCamera) view.FocusCamera.EndPresentationCamera();
             ownsCamera = false;
@@ -293,9 +326,8 @@ namespace TimeTheft
             heading = Text(panel, "Outcome", "", 116, theme.Accent, new Vector2(0, 100), new Vector2(860, 150));
             caption = Text(panel, "Caption", "", 30, theme.Text, new Vector2(0, -5), new Vector2(860, 50));
             balance = Text(panel, "Balance", "", 27, theme.MutedText, new Vector2(0, -70), new Vector2(860, 80));
-            restartButton = Button(panel, "Restart", "다시하기", new Vector2(0, -192), new Vector2(320, 66), () =>
-            { if (CanRestart) { view.FocusCamera.SuppressPointerForCurrentFrame(); restartGame?.Invoke(); } });
-            Text(panel, "Restart Hint", "R  다시하기", 21, theme.MutedText, new Vector2(0, -259), new Vector2(500, 35));
+            mainMenuButton = Button(panel, "Main Menu", "메인으로", new Vector2(0, -192), new Vector2(320, 66), () =>
+            { if (CanLeaveResult) { view.FocusCamera.SuppressPointerForCurrentFrame(); returnToMainMenu?.Invoke(); } });
             skipButton = Button(overlay.transform, "Skip Ending", "연출 단축  [SPACE]", new Vector2(-220, 54), new Vector2(350, 54), () => controller.SkipAnimation());
             var skipRect = (RectTransform)skipButton.transform;
             skipRect.anchorMin = skipRect.anchorMax = new Vector2(1, 0);

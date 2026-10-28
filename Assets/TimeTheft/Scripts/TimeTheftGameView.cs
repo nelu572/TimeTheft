@@ -354,6 +354,8 @@ namespace TimeTheft
             bank.transform.localScale = bankScale * (1 + (fromBank != toBank ? pulse : 0));
             if (t < 1) return;
             IsCountingTime = false;
+            int lostMinutes = fromPlayer - toPlayer;
+            if (lostMinutes > 0 && ResultPresentation) ResultPresentation.ReactToLifeLoss(lostMinutes);
             fromPlayer = toPlayer; fromAi = toAi; fromBank = toBank;
         }
 
