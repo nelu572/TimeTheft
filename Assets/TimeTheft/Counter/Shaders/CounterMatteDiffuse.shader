@@ -21,6 +21,7 @@ Shader "TimeTheft/Counter Matte Diffuse"
             #pragma fragment Frag
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+            #pragma multi_compile _ _FORWARD_PLUS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma multi_compile_fog
@@ -51,8 +52,21 @@ Shader "TimeTheft/Counter Matte Diffuse"
                 // No emission, brightness floor, reflections or specular. Ambient is the scene SH.
                 half3 irradiance=max(0,SampleSH(n));
                 irradiance+=Diffuse(GetMainLight(TransformWorldToShadowCoord(i.positionWS)),n);
+                // Forward+ uses clustered light indices instead of a per-object count.
+                InputData inputData=(InputData)0;
+                inputData.positionWS=i.positionWS;
+                inputData.normalizedScreenSpaceUV=GetNormalizedScreenSpaceUV(i.positionCS);
+                #if USE_FORWARD_PLUS
+                [loop] for(uint lightIndex=0u;lightIndex<min(URP_FP_DIRECTIONAL_LIGHTS_COUNT,MAX_VISIBLE_LIGHTS);lightIndex++)
+                {
+                    FORWARD_PLUS_SUBTRACTIVE_LIGHT_CHECK
+                    irradiance+=Diffuse(GetAdditionalLight(lightIndex,i.positionWS,half4(1,1,1,1)),n);
+                }
+                #endif
                 uint count=GetAdditionalLightsCount();
-                for(uint index=0u;index<count;index++)irradiance+=Diffuse(GetAdditionalLight(index,i.positionWS,half4(1,1,1,1)),n);
+                LIGHT_LOOP_BEGIN(count)
+                    irradiance+=Diffuse(GetAdditionalLight(lightIndex,i.positionWS,half4(1,1,1,1)),n);
+                LIGHT_LOOP_END
                 half3 albedo=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).rgb*_BaseColor.rgb;
                 return half4(MixFog(albedo*irradiance,i.fog),1);
             }
