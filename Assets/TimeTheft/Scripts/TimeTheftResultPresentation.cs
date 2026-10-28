@@ -41,6 +41,10 @@ namespace TimeTheft
         private int initialLife, shownFrame, armedFrame;
         private float damageStartsAt, damageStrength, shownAt;
         private float heartbeatPhase, heartbeatStrength;
+        private Camera feedbackCamera;
+        private Vector3 renderCameraPosition, endingCameraPosition;
+        private Quaternion renderCameraRotation, endingCameraRotation;
+        private bool renderCameraOffset;
         private bool initialized, skip, endingComplete, ownsCamera, damageGlowMuted;
         private Action returnToMainMenu;
         private static readonly int GlowId = Shader.PropertyToID("_GlowIntensity");
@@ -51,6 +55,7 @@ namespace TimeTheft
         public float Pressure { get; private set; }
         public float DamageReaction { get; private set; }
         public float Heartbeat { get; private set; }
+        public float CameraSwayDegrees { get; private set; }
         public Volume PressureVolume => pressureVolume;
         public UnityEngine.UI.Button MainMenuButton => mainMenuButton;
         public TMP_Text Heading => heading;
@@ -61,6 +66,7 @@ namespace TimeTheft
             if (!sourceVolume || !sourceVolume.sharedProfile || !theme)
                 throw new InvalidOperationException("결과 연출의 기존 Volume과 타이틀 테마를 연결하세요.");
             controller = owner; view = gameView; returnToMainMenu = mainMenu;
+            feedbackCamera = view.FocusCamera.GetComponent<Camera>();
             var baseline = sourceVolume.sharedProfile;
             baseChromatic = baseline.TryGet<ChromaticAberration>(out var ca) ? ca.intensity.value : 0;
             baseVignette = baseline.TryGet<Vignette>(out var vi) ? vi.intensity.value : 0;
@@ -102,6 +108,7 @@ namespace TimeTheft
             }
             CreateUi();
             initialized = true;
+            RegisterCameraFeedback();
             ResetPresentation();
         }
 
@@ -141,6 +148,7 @@ namespace TimeTheft
             if (Mathf.Abs(Pressure - target) < .0001f) Pressure = target;
             UpdateDamageReaction();
             UpdateHeartbeat(ratio);
+            CameraSwayDegrees = Mathf.Min(.3f, .10f * heartbeatStrength + .18f * Heartbeat + .12f * DamageReaction);
             ApplyEffects(Pressure, 0, DamageReaction, Heartbeat);
         }
 
@@ -162,6 +170,56 @@ namespace TimeTheft
         private void ResetHeartbeat()
         {
             heartbeatPhase = heartbeatStrength = Heartbeat = 0;
+        }
+
+        private void RegisterCameraFeedback()
+        {
+            UnregisterCameraFeedback();
+            RenderPipelineManager.beginCameraRendering += BeginFeedbackRender;
+            RenderPipelineManager.endCameraRendering += EndFeedbackRender;
+        }
+
+        private void UnregisterCameraFeedback()
+        {
+            RenderPipelineManager.beginCameraRendering -= BeginFeedbackRender;
+            RenderPipelineManager.endCameraRendering -= EndFeedbackRender;
+            RestoreRenderCamera();
+        }
+
+        private void BeginFeedbackRender(ScriptableRenderContext context, Camera camera)
+        {
+            if (!initialized || !isActiveAndEnabled || !Application.isPlaying || camera != feedbackCamera ||
+                !controller || !controller.isActiveAndEnabled || IsEnding || endingComplete || IsVisible ||
+                CameraSwayDegrees <= 0 || renderCameraOffset || view.FocusCamera.IsTransitioning) return;
+            renderCameraPosition = camera.transform.position;
+            renderCameraRotation = camera.transform.rotation;
+            renderCameraOffset = true;
+            float time = Time.unscaledTime;
+            var angles = new Vector3(Mathf.Sin(time * 5.1f) * .45f,
+                Mathf.Sin(time * 4.3f + 1) * .35f, Mathf.Sin(time * 3.7f) * .65f) * CameraSwayDegrees;
+            camera.transform.rotation = renderCameraRotation * Quaternion.Euler(angles);
+        }
+
+        private void EndFeedbackRender(ScriptableRenderContext context, Camera camera)
+        {
+            if (camera == feedbackCamera) RestoreRenderCamera();
+        }
+
+        private void RestoreRenderCamera()
+        {
+            if (!renderCameraOffset) return;
+            if (feedbackCamera) feedbackCamera.transform.SetPositionAndRotation(renderCameraPosition, renderCameraRotation);
+            renderCameraOffset = false;
+        }
+
+        private void ApplyDefeatCamera(float progress)
+        {
+            if (!ownsCamera || !feedbackCamera) return;
+            float t = Mathf.SmoothStep(0, 1, Mathf.Clamp01(progress));
+            var back = Vector3.ProjectOnPlane(-(endingCameraRotation * Vector3.forward), Vector3.up).normalized;
+            feedbackCamera.transform.SetPositionAndRotation(
+                endingCameraPosition + (back * .45f + Vector3.down * .22f) * t,
+                endingCameraRotation * Quaternion.Euler(-55 * t, 0, 6 * t));
         }
 
         private static bool InputHeld()
@@ -219,32 +277,37 @@ namespace TimeTheft
             if (!initialized || IsEnding || endingComplete || IsVisible || winner == GameWinner.None) yield break;
             CancelDamageReaction();
             ResetHeartbeat();
+            CameraSwayDegrees = 0; RestoreRenderCamera();
             IsEnding = true; skip = false;
             view.PrepareResultPresentation();
             view.FocusCamera.BeginPresentationCamera(); ownsCamera = true;
+            endingCameraPosition = feedbackCamera.transform.position;
+            endingCameraRotation = feedbackCamera.transform.rotation;
             overlay.SetActive(true);
             skipButton.gameObject.SetActive(true);
             bool won = winner == GameWinner.Player;
             float startPressure = Pressure, elapsed = 0;
             while (elapsed < 2.15f && !skip && IsEnding && isActiveAndEnabled)
             {
-                // 마지막 숫자를 잠깐 유지한 뒤 해방/붕괴, 암전 순서로 진행한다.
+                // 마지막 숫자를 유지한 뒤, 패배는 뒤로 넘어가며 암전한다.
+                if (!won) ApplyDefeatCamera(Mathf.InverseLerp(.25f, 1.65f, elapsed));
                 float transition = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.3f, 1.15f, elapsed));
                 float pulse = !won && elapsed >= .35f && elapsed <= .67f
                     ? Mathf.Sin(Mathf.PI * Mathf.InverseLerp(.35f, .67f, elapsed)) : 0;
                 ApplyEffects(won ? Mathf.Lerp(startPressure, 0, transition) : Mathf.Lerp(startPressure, 1, transition), pulse);
                 SetLights(won ? 1 : Mathf.Lerp(1, .08f, transition), won ? transition * .14f : 0);
                 SetGlow(won ? Mathf.Sin(Mathf.PI * transition) : 0);
-                SetShade(Mathf.SmoothStep(0, won ? .82f : 1, Mathf.InverseLerp(1.05f, 1.95f, elapsed)));
+                SetShade(Mathf.SmoothStep(0, 1, Mathf.InverseLerp(won ? 1.05f : .7f, 1.95f, elapsed)));
                 elapsed += Time.unscaledDeltaTime;
                 yield return null;
             }
             if (!IsEnding || !isActiveAndEnabled) yield break;
+            if (!won) ApplyDefeatCamera(1);
             IsEnding = false; endingComplete = true; skip = false;
             ApplyEffects(0);
             RestoreGlow();
             SetLights(won ? .65f : .08f, won ? .14f : 0);
-            SetShade(.82f);
+            SetShade(1);
             skipButton.gameObject.SetActive(false);
         }
 
@@ -255,6 +318,7 @@ namespace TimeTheft
             if (!initialized || IsVisible) return;
             CancelDamageReaction();
             ResetHeartbeat();
+            CameraSwayDegrees = 0; RestoreRenderCamera();
             IsVisible = true;
             bool won = match.Winner == GameWinner.Player;
             heading.text = won ? "승리" : "패배";
@@ -264,7 +328,7 @@ namespace TimeTheft
                 "\nTIME BANK  " + GameTime.Format(match.BankMinutes);
             ApplyEffects(0);
             overlay.SetActive(true);
-            SetShade(.82f);
+            SetShade(1);
             content.gameObject.SetActive(true); content.alpha = 0;
             mainMenuButton.interactable = false;
             shownFrame = armedFrame = Time.frameCount; shownAt = Time.unscaledTime;
@@ -301,13 +365,14 @@ namespace TimeTheft
                 if (counters[i]) counters[i].SetPropertyBlock(originalBlocks[i]);
         }
 
-        private void SetShade(float alpha) => shade.color = new Color(0.015f, .02f, .022f, alpha);
+        private void SetShade(float alpha) => shade.color = new Color(0, 0, 0, alpha);
 
         public void ResetPresentation()
         {
             if (!initialized) return;
             IsEnding = IsVisible = endingComplete = skip = false;
-            Pressure = 0;
+            Pressure = CameraSwayDegrees = 0;
+            RestoreRenderCamera();
             CancelDamageReaction();
             ResetHeartbeat();
             ApplyEffects(0); SetLights(1, 0); RestoreGlow();
@@ -396,9 +461,11 @@ namespace TimeTheft
             return button;
         }
 
-        private void OnDisable() => ResetPresentation();
+        private void OnEnable() { if (initialized) RegisterCameraFeedback(); }
+        private void OnDisable() { UnregisterCameraFeedback(); ResetPresentation(); }
         private void OnDestroy()
         {
+            UnregisterCameraFeedback();
             ResetPresentation();
             if (profile)
             {

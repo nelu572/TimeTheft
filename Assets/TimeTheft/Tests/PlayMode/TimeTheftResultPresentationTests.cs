@@ -142,6 +142,7 @@ namespace TimeTheft.Tests
             yield return new WaitForSecondsRealtime(.2f);
             Assert.That(presentation.DamageReaction, Is.Zero);
             Assert.That(presentation.Heartbeat, Is.Zero);
+            Assert.That(presentation.CameraSwayDegrees, Is.Zero);
             Assert.That(presentation.PressureVolume.weight, Is.Zero);
 
             match.CompleteTurn();
@@ -236,7 +237,7 @@ namespace TimeTheft.Tests
             }
             Assert.That(pair && rest, Is.True, "두 번 두근거린 뒤 쉬는 간격을 둔다");
             Assert.That(darkest - lightest, Is.GreaterThan(.018f));
-            Assert.That(darkest, Is.LessThan(.35f), "가장자리 맥동을 절제한다");
+            Assert.That(darkest, Is.LessThan(.41f), "기본 비네트 0.18 위의 맥동을 절제한다");
 
             presentation.ReactToLifeLoss(60);
             yield return null;
@@ -248,6 +249,72 @@ namespace TimeTheft.Tests
             controller.RestartGame();
             yield return new WaitForSecondsRealtime(.25f);
             AssertRestored();
+        }
+
+        [UnityTest]
+        public IEnumerator CameraSwayRestoresEveryRenderAndDefeatFallsIntoBlack()
+        {
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 18;
+            controller.RestartGame();
+            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingClock &&
+                !controller.View.Lifecycle.IsRunning && !controller.View.WorldItems.ModelUses.IsAcquiring);
+            controller.StopAllCoroutines();
+            var focus = controller.View.FocusCamera;
+            var camera = focus.GetComponent<Camera>();
+            focus.BeginPresentationCamera();
+            Vector3 position = camera.transform.position, up = camera.transform.up, forward = camera.transform.forward;
+            var match = controller.Match;
+            int first = ClockOfKind(ClockKind.Normal);
+            Settle(match, first, TimeAction.Collect); match.CompleteTurn();
+            Settle(match, ClockOfKind(ClockKind.Normal, first), TimeAction.Collect);
+            controller.View.Numbers(match);
+            bool applied = false, restored = false;
+            Action<ScriptableRenderContext, Camera> begin = (context, current) =>
+            {
+                if (current != camera || presentation.CameraSwayDegrees <= 0) return;
+                float difference = Vector3.Distance(current.transform.up, up) + Vector3.Distance(current.transform.forward, forward);
+                applied |= difference > .0001f && difference < .012f;
+            };
+            Action<ScriptableRenderContext, Camera> end = (context, current) =>
+            {
+                if (current != camera) return;
+                restored |= Vector3.Distance(current.transform.up, up) + Vector3.Distance(current.transform.forward, forward) < .00001f;
+            };
+            RenderPipelineManager.beginCameraRendering += begin;
+            RenderPipelineManager.endCameraRendering += end;
+            try
+            {
+                yield return WaitFor(() => applied && restored);
+                Assert.That(presentation.CameraSwayDegrees, Is.GreaterThan(0).And.LessThanOrEqualTo(.3f));
+                Assert.That(camera.transform.position, Is.EqualTo(position));
+                Assert.That(Vector3.Distance(camera.transform.up, up), Is.LessThan(.00001f));
+            }
+            finally
+            {
+                RenderPipelineManager.beginCameraRendering -= begin;
+                RenderPipelineManager.endCameraRendering -= end;
+            }
+            focus.EndPresentationCamera();
+
+            yield return Finish(ClockKind.Red);
+            Vector3 startPosition = camera.transform.position;
+            Quaternion startRotation = camera.transform.rotation;
+            yield return new WaitForSecondsRealtime(.9f);
+            Assert.That(Quaternion.Angle(startRotation, camera.transform.rotation), Is.GreaterThan(10));
+            Assert.That(Vector3.Distance(startPosition, camera.transform.position), Is.GreaterThan(.05f));
+            Capture("defeat-fall-mid");
+            yield return WaitFor(() => presentation.IsVisible);
+            yield return new WaitForSecondsRealtime(.3f);
+            AssertBlackResult();
+            Assert.That(presentation.CameraSwayDegrees, Is.Zero);
+            Capture("defeat-black-result");
+            yield return new WaitForSecondsRealtime(.1f);
+            controller.RestartGame();
+            controller.enabled = false;
+            AssertRestored();
+            Assert.That(camera.transform.position, Is.EqualTo(focus.OverviewPosition));
+            Assert.That(Quaternion.Angle(camera.transform.rotation, focus.OverviewRotation), Is.LessThan(.001f));
+            Assert.That(camera.fieldOfView, Is.EqualTo(focus.OverviewFieldOfView));
         }
 
         [UnityTest]
@@ -266,6 +333,7 @@ namespace TimeTheft.Tests
             Assert.That(Time.realtimeSinceStartup - started, Is.LessThan(3));
             yield return new WaitForSecondsRealtime(.35f);
             Assert.That(presentation.Heading.text, Is.EqualTo("승리"));
+            AssertBlackResult();
             Assert.That(presentation.PressureVolume.weight, Is.Zero);
             Assert.That(controller.Match, Is.SameAs(match));
             Assert.That(presentation.CanLeaveResult, Is.True);
@@ -286,6 +354,7 @@ namespace TimeTheft.Tests
             yield return WaitFor(() => presentation.IsVisible);
             yield return new WaitForSecondsRealtime(.3f);
             Assert.That(presentation.Heading.text, Is.EqualTo("패배"));
+            AssertBlackResult();
             Assert.That(presentation.CanLeaveResult, Is.False);
             controller.RequestMainMenu();
             Assert.That(controller.Match, Is.SameAs(finalMatch), "스킵/재시작 키를 유지해도 다음 게임으로 넘어가지 않는다");
@@ -348,12 +417,20 @@ namespace TimeTheft.Tests
             Assert.That(match.Settle(), Is.True);
         }
 
+        private void AssertBlackResult()
+        {
+            var canvas = presentation.MainMenuButton.GetComponentInParent<Canvas>();
+            var background = canvas.transform.Find("World Shade").GetComponent<UnityEngine.UI.Image>();
+            Assert.That(background.color, Is.EqualTo(Color.black));
+        }
+
         private void AssertRestored()
         {
             Assert.That(presentation.IsEnding || presentation.IsVisible, Is.False);
             Assert.That(presentation.Pressure, Is.Zero);
             Assert.That(presentation.DamageReaction, Is.Zero);
             Assert.That(presentation.Heartbeat, Is.Zero);
+            Assert.That(presentation.CameraSwayDegrees, Is.Zero);
             Assert.That(presentation.PressureVolume.weight, Is.Zero);
             if (!controller.enabled) Assert.That(controller.View.FocusCamera.IsPresentationCameraOwned, Is.False);
             for (int i = 0; i < lights.Length; i++)
