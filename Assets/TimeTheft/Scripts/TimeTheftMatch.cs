@@ -88,7 +88,7 @@ namespace TimeTheft
     {
         public const int ClocksPerBatch = 5;
         public const int TurnsPerBatch = 4;
-        public const int InitialContributionMinutes = 10 * GameTime.MinutesPerHour;
+        public const int InitialContributionMinutes = 15 * GameTime.MinutesPerHour;
         private readonly GameRules rules;
         private readonly Random random;
         private readonly Random itemRandom;

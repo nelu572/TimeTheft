@@ -14,6 +14,11 @@ namespace TimeTheft
         private System.Random aiRandom;
         private bool skipRequested;
         private bool selectingClock;
+        private bool openingTurn;
+        private int announcedTurn;
+        private TimeTheftFlowNotice flowNotice;
+        public bool IsFlowBlocked => openingTurn || flowNotice && flowNotice.IsVisible;
+        public TimeTheftFlowNotice FlowNotice => flowNotice;
         public bool IsPresentingClock => selectingClock;
         public bool IsPresentingItem { get; private set; }
         public TimeTheftMatch Match { get; private set; }
@@ -27,6 +32,8 @@ namespace TimeTheft
             view.Initialize(SelectClock, ChooseAction, RequestRestart);
             view.InitializeItemControls(SelectItem, UseSelectedItem, EndItemPhase, KeepPeekedClock);
             view.InitializeMouseControls(SkipAnimation);
+            flowNotice = gameObject.AddComponent<TimeTheftFlowNotice>();
+            flowNotice.Initialize(view);
             RestartGame();
         }
 
@@ -37,6 +44,7 @@ namespace TimeTheft
             if (keyboard.hKey.wasPressedThisFrame) view.ToggleHelp();
             if (keyboard.rKey.wasPressedThisFrame) RequestRestart();
             if (keyboard.spaceKey.wasPressedThisFrame) SkipAnimation();
+            if (IsFlowBlocked || IsPresentingItem || selectingClock) return;
             if (Match != null && Match.Stage == TurnStage.AwaitingKeyDecision && Match.ActiveParticipant == Participant.Player)
             {
                 if (keyboard.enterKey.wasPressedThisFrame) KeepPeekedClock();
@@ -60,6 +68,8 @@ namespace TimeTheft
         {
             if (!isActiveAndEnabled || !view) return;
             StopAllCoroutines();
+            if (flowNotice) flowNotice.Cancel();
+            openingTurn = false; announcedTurn = 0;
             selectingClock = false;
             skipRequested = false;
             IsPresentingItem = false;
@@ -74,6 +84,9 @@ namespace TimeTheft
         private IEnumerator DealBatch()
         {
             if (!Match.BeginBatch()) yield break;
+            view.LockLifecycleInput();
+            yield return flowNotice.Show(TimeTheftFlowNotice.BatchName(Match.Batch),
+                Match.Batch == 1 ? "게임을 시작합니다 · 숫자와 종류를 기억하세요" : "새 시계의 숫자와 종류를 기억하세요", 1.15f);
             view.ShowBatch(Match);
             var lifecycle = view.Lifecycle;
             if (lifecycle && lifecycle.CanPlay(view))
@@ -109,13 +122,13 @@ namespace TimeTheft
 
         public void ChooseAction(TimeAction action)
         {
-            if (!isActiveAndEnabled || selectingClock || Match == null || !Match.CommitAction(Participant.Player, action)) return;
+            if (!isActiveAndEnabled || IsFlowBlocked || IsPresentingItem || selectingClock || Match == null || !Match.CommitAction(Participant.Player, action)) return;
             StartCoroutine(Resolve());
         }
 
         public void SelectClock(int index)
         {
-            if (!isActiveAndEnabled || IsPresentingItem || selectingClock || Match == null ||
+            if (!isActiveAndEnabled || IsFlowBlocked || IsPresentingItem || selectingClock || Match == null ||
                 (view.WorldItems.ModelUses && view.WorldItems.ModelUses.IsAcquiring)) return;
             if (Match.Stage == TurnStage.AwaitingAction && Match.ActiveParticipant == Participant.Player && index == Match.CurrentClock)
             { CancelClockSelection(); return; }
@@ -151,7 +164,7 @@ namespace TimeTheft
 
         public bool CancelClockSelection()
         {
-            if (!isActiveAndEnabled || IsPresentingItem || selectingClock || Match == null || Match.ActiveParticipant != Participant.Player) return false;
+            if (!isActiveAndEnabled || IsFlowBlocked || IsPresentingItem || selectingClock || Match == null || Match.ActiveParticipant != Participant.Player) return false;
             int index = Match.CurrentClock;
             if (!Match.CancelClockSelection(Participant.Player))
             {
@@ -206,7 +219,7 @@ namespace TimeTheft
 
         public void UseItem(int itemId)
         {
-            if (!isActiveAndEnabled || IsPresentingItem || Match == null) return;
+            if (!isActiveAndEnabled || IsFlowBlocked || selectingClock || IsPresentingItem || Match == null) return;
             if (view.WorldItems.ModelUses && !view.WorldItems.ModelUses.CanUseVisual(Participant.Player, itemId)) return;
             var result = Match.UseItem(Participant.Player, itemId);
             if (!result.Succeeded)
@@ -220,7 +233,7 @@ namespace TimeTheft
 
         public void SelectItem(int itemId)
         {
-            if (!isActiveAndEnabled || IsPresentingItem || Match == null || !view ||
+            if (!isActiveAndEnabled || IsFlowBlocked || selectingClock || IsPresentingItem || Match == null || !view ||
                 Match.Stage != TurnStage.AwaitingItems || Match.ActiveParticipant != Participant.Player) return;
             view.SelectItem(Match, itemId);
         }
@@ -242,24 +255,32 @@ namespace TimeTheft
             IsPresentingItem = true;
             view.ShowItemUse(PublicItemResult(result));
             view.RefreshInventory(Match);
-            yield return Animate(.15f, null);
-            while (view.WorldItems.ModelUses && view.WorldItems.ModelUses.IsPreparing)
-            { if (skipRequested) view.WorldItems.ModelUses.SkipMotion(); yield return null; }
+            if (view.WorldItems.ModelUses) yield return view.WorldItems.ModelUses.WaitForTransitions();
+            view.RefreshInventory(Match);
             skipRequested = false;
             IsPresentingItem = false;
         }
 
         public void EndItemPhase()
         {
-            if (!isActiveAndEnabled || IsPresentingItem || Match == null || !Match.EndItemPhase(Participant.Player)) return;
+            if (!isActiveAndEnabled || IsFlowBlocked || selectingClock || IsPresentingItem || Match == null || !Match.EndItemPhase(Participant.Player)) return;
             StartCoroutine(OpenTurn());
         }
 
         private IEnumerator OpenTurn()
         {
+            openingTurn = true;
+            view.LockLifecycleInput();
+            if (view.WorldItems.ModelUses) yield return view.WorldItems.ModelUses.WaitForTransitions();
             // 공급은 기본 테이블 구도에서 끝낸 뒤 AI의 카메라/턴 소유권을 넘긴다.
             if (view.WorldItems.ModelUses && view.WorldItems.ModelUses.IsAcquiring)
                 yield return view.WorldItems.ModelUses.WaitForAcquisitions();
+            if (announcedTurn != Match.Turn)
+            {
+                announcedTurn = Match.Turn;
+                yield return flowNotice.Show(Match.ActiveParticipant == Participant.Player ? "당신의 차례" : "상대의 차례", "", .7f);
+            }
+            openingTurn = false;
             var turnMotion = view.TurnPresentation;
             if (Match.ActiveParticipant == Participant.Ai && turnMotion)
                 for (int index = 0; index < TimeTheftMatch.ClocksPerBatch; index++)
@@ -313,7 +334,7 @@ namespace TimeTheft
                 : TimeTheftAi.Decide(actionInfo.PublicGame, actionInfo.Strategy.RiskTolerance, aiRandom);
             if (!Match.CommitAction(Participant.Ai, action)) yield break;
             view.ShowOpponentCommittedAction(Match);
-            yield return Animate(1.35f, null, false);
+            yield return flowNotice.Show(action == TimeAction.Collect ? "징수" : "배급", "상대가 행동을 선택했습니다", 1.15f);
             yield return Resolve();
         }
 
@@ -353,6 +374,7 @@ namespace TimeTheft
                 if (lifecycle && lifecycle.CanPlay(view)) yield return lifecycle.Remove(view, Match.CurrentClock, false);
                 else yield return motion.ReturnToLegacy();
             }
+            if (view.WorldItems.ModelUses) yield return view.WorldItems.ModelUses.WaitForTransitions();
             if (Match.Stage == TurnStage.GameOver) { view.Result(Match); yield break; }
             Match.CompleteTurn();
             if (motion) motion.Cancel();
@@ -399,7 +421,7 @@ namespace TimeTheft
                 result.Failure, effect, removed);
         }
 
-        public bool CanSkipAnimation => isActiveAndEnabled && Match != null && view && !view.IsResultVisible &&
+        public bool CanSkipAnimation => isActiveAndEnabled && Match != null && view && !view.IsResultVisible && !(flowNotice && flowNotice.IsVisible) &&
             ((view.Lifecycle && view.Lifecycle.IsRunning) || (view.TurnPresentation && view.TurnPresentation.IsBusy) ||
              IsPresentingItem || (Match.Stage != TurnStage.AwaitingAction && Match.Stage != TurnStage.AwaitingClock &&
                 Match.Stage != TurnStage.AwaitingItems && Match.Stage != TurnStage.AwaitingKeyDecision &&
@@ -451,6 +473,8 @@ namespace TimeTheft
         private void OnDisable()
         {
             StopAllCoroutines();
+            if (flowNotice) flowNotice.Cancel();
+            openingTurn = false; announcedTurn = 0;
             selectingClock = false;
             IsPresentingItem = false;
             skipRequested = false;

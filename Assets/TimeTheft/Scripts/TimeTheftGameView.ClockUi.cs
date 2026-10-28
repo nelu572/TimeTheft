@@ -56,7 +56,7 @@ namespace TimeTheft
 
         private void ShowCommittedAction(TimeTheftMatch match)
         {
-            committedActionCue = match.ActiveParticipant == Participant.Ai ? "상대 · " + ActionName(match.Action) : "";
+            committedActionCue = ""; // 행동은 중앙 안내에서만 표시한다.
             publicActionUntil = Time.unscaledTime + 2.8f;
         }
 

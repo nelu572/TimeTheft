@@ -16,7 +16,7 @@ namespace TimeTheft.Tests
         private static Participant Other(Participant actor) => actor == Participant.Player ? Participant.Ai : Participant.Player;
 
         private static TimeTheftMatch NewMatch(Participant first = Participant.Player, int life = 30, int hours = 1) =>
-            new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = first, InitialLifeHours = life,
+            new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = first, InitialLifeHours = life + 5,
                 MinimumHours = hours, MaximumHours = hours, ExtraRedProbability = 0 }, new OrderedRandom());
 
         private static void StartBatch(TimeTheftMatch match)
@@ -76,7 +76,7 @@ namespace TimeTheft.Tests
             Assert.That(match.ActiveParticipant, Is.EqualTo(target));
             Assert.That(match.Stage, Is.EqualTo(TurnStage.AwaitingItems));
             Assert.That(match.CheckItemUse(target, item), Is.EqualTo(ItemUseFailure.None));
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
         }
 
         [TestCase(Participant.Player)]
@@ -166,7 +166,7 @@ namespace TimeTheft.Tests
             Resolve(match, 0);
             Assert.That(match.GetCurrentItemEffects(actor), Is.Empty);
             Assert.That(match.GetPendingItemEffects(actor), Is.Empty);
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
         }
 
         [TestCase(false)]
@@ -209,11 +209,11 @@ namespace TimeTheft.Tests
             Resolve(match, 2, TimeAction.Collect);
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(960));
             Assert.That(match.AiLifeMinutes, Is.EqualTo(1320));
-            Assert.That(match.BankMinutes, Is.EqualTo(1320));
+            Assert.That(match.BankMinutes, Is.EqualTo(1920));
             Assert.That(match.LastItemEffects.Single(effect => effect.Source.Kind == ItemKind.Screwdriver).PreventedMinutes, Is.EqualTo(240));
             Assert.That(match.LastItemEffects.Single(effect => effect.Source.Kind == ItemKind.TimeBypass).BypassedMinutes, Is.EqualTo(120));
             Assert.That(match.IsItemUseBlocked(Participant.Ai), Is.True);
-            Assert.That(Total(match), Is.EqualTo(3600));
+            Assert.That(Total(match), Is.EqualTo(4200));
         }
 
         [Test]

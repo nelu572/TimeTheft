@@ -20,6 +20,7 @@ namespace TimeTheft
             public int Turn, Batch;
             public bool Activated, Ended, Held, Prepared, Deployed, Applied, Ready, Inspected, EndRequested, FailureReported;
             public float Speed;
+            public bool HoldsCutLayout;
             public Quaternion ContactRotation;
         }
         private sealed class Acquisition
@@ -45,6 +46,21 @@ namespace TimeTheft
         private int inspectedIndex = -1;
         public int ActiveCount => uses.Count;
         public bool IsPreparing => uses.Any(u => u.Item && !u.Ready);
+        public bool IsTransitioning => uses.Any(IsBlocking);
+        private static bool IsBlocking(Use use) => use.Item &&
+            use.Item.ModelPresentation.State != ItemPresentationState.Complete &&
+            use.Item.ModelPresentation.State != ItemPresentationState.Failed &&
+            (!use.Ready || use.Ended || use.EndRequested || use.Activated && !use.Applied);
+
+        public IEnumerator WaitForTransitions()
+        {
+            int id = generation;
+            // Match의 턴 이벤트와 Update의 실행 순서에 의존하지 않는다.
+            if (game && game.Match != null) ApplyTurnSignals(game.Match);
+            while (id == generation && IsTransitioning) yield return null;
+            // Complete 신호 뒤 소유자 정리와 인벤토리 재배치까지 끝낸다.
+            if (id == generation) yield return null;
+        }
         public bool IsAcquiring => acquisitions.Any(a => a.Item && !a.Completed);
         public bool HasAcquisitionFailure => acquisitions.Any(a => a.Item && a.Failed);
         public ItemHatchController Hatch => hatch;
@@ -255,7 +271,7 @@ namespace TimeTheft
                 }
             if (refreshed && game && game.Match != null) view.RefreshInventory(game.Match);
         }
-        public bool CanUseVisual(Participant owner, int id) => !IsAcquiring && !acquisitions.Any(a => a.Item && a.Item.Owner == owner && a.Item.ItemId == id);
+        public bool CanUseVisual(Participant owner, int id) => (!game || !game.IsFlowBlocked) && !IsAcquiring && !acquisitions.Any(a => a.Item && a.Item.Owner == owner && a.Item.ItemId == id);
         public IEnumerator WaitForAcquisitions()
         {
             int id = generation;
@@ -271,6 +287,7 @@ namespace TimeTheft
             var use = new Use { Item = item, Kind = kind, Owner = result.Actor, Token = "use/" + ++serial,
                 Turn = game.Match.Turn, Batch = game.Match.Batch, Speed = model.PlaybackSpeed,
                 ContactRotation = model.Contact ? model.Contact.rotation : model.MotionRoot.rotation };
+            if (kind == ItemKind.Scissors) { inventory.BeginCutPresentation(); use.HoldsCutLayout = true; }
             use.AnchorRoot = new GameObject("Item anchors " + serial).transform; use.AnchorRoot.SetParent(actors, false);
             var targetSide = result.Actor == Participant.Player ? inventory.OpponentAnchor : inventory.PlayerAnchor;
             var targetPosition = BoundaryTarget(use, targetSide);
@@ -450,7 +467,7 @@ namespace TimeTheft
                 if (!use.Item) { Release(use); uses.RemoveAt(i); continue; }
                 var model = use.Item.ModelPresentation;
                 if (model.State == ItemPresentationState.Complete)
-                { Release(use); uses.RemoveAt(i); continue; }
+                { bool cut = use.HoldsCutLayout; Release(use); uses.RemoveAt(i); if (cut) view.RefreshInventory(match); continue; }
                 if (model.State == ItemPresentationState.Failed)
                 {
                     use.Ready = true;
@@ -463,20 +480,31 @@ namespace TimeTheft
                 }
                 if (use.Ready && model.State == ItemPresentationState.Holding && (!use.Activated || use.Applied)) model.PlaybackSpeed = use.Speed;
                 if (use.Activated && (use.Kind == ItemKind.SpareKey || use.Kind == ItemKind.Screwdriver) && match.ActiveParticipant == use.Owner && match.CurrentClock >= 0 && !use.Ended) BindClock(use, match.CurrentClock);
-                foreach (var signal in match.TurnItemEvents)
-                    if ((match.Batch != use.Batch || match.Turn != use.Turn) && signal.Source.Owner == use.Owner && signal.Source.Kind == use.Kind)
-                    {
-                        if (signal.Kind == ItemTurnEventKind.ItemsBlocked || signal.Kind == ItemTurnEventKind.TurnSkipped) Activate(use);
-                        if (signal.Kind != ItemTurnEventKind.ItemsBlocked) use.Ended = true;
-                    }
-                if ((match.Stage == TurnStage.GameOver && (use.Kind == ItemKind.RubberDuck || use.Kind == ItemKind.Handcuffs)) ||
-                    ((use.Kind == ItemKind.SpareKey || use.Kind == ItemKind.Screwdriver || use.Kind == ItemKind.TimeBypass) && (match.Batch != use.Batch || match.Turn != use.Turn))) use.Ended = true;
-                if (use.Ended && (use.Held || model.State == ItemPresentationState.Holding && !use.Activated)) End(use);
+                ApplyTurnSignals(use, match);
             }
+        }
+        private void ApplyTurnSignals(TimeTheftMatch match)
+        {
+            foreach (var use in uses) ApplyTurnSignals(use, match);
+        }
+        private void ApplyTurnSignals(Use use, TimeTheftMatch match)
+        {
+            if (!use.Item) return;
+            foreach (var signal in match.TurnItemEvents)
+                if ((match.Batch != use.Batch || match.Turn != use.Turn) && signal.Source.Owner == use.Owner && signal.Source.Kind == use.Kind)
+                {
+                    if (signal.Kind == ItemTurnEventKind.ItemsBlocked || signal.Kind == ItemTurnEventKind.TurnSkipped) Activate(use);
+                    if (signal.Kind != ItemTurnEventKind.ItemsBlocked) use.Ended = true;
+                }
+            if ((match.Stage == TurnStage.GameOver && (use.Kind == ItemKind.RubberDuck || use.Kind == ItemKind.Handcuffs)) ||
+                ((use.Kind == ItemKind.SpareKey || use.Kind == ItemKind.Screwdriver || use.Kind == ItemKind.TimeBypass) && (match.Batch != use.Batch || match.Turn != use.Turn))) use.Ended = true;
+            if (use.Ended && (use.Held || use.Item.ModelPresentation.State == ItemPresentationState.Holding && !use.Activated)) End(use);
         }
         public void SkipMotion() { skip = true; foreach (var use in uses) if (use.Item) use.Item.ModelPresentation.PlaybackSpeed = Mathf.Max(30, use.Speed); }
         private void Release(Use use)
         {
+            if (use.HoldsCutLayout) { inventory.EndCutPresentation(); use.HoldsCutLayout = false; }
+
             if (use.Item) { use.Item.ModelPresentation.ResetPresentation(); use.Item.gameObject.SetActive(false); Destroy(use.Item.gameObject); }
             if (use.Removed) { use.Removed.gameObject.SetActive(false); Destroy(use.Removed.gameObject); }
             if (use.AnchorRoot) Destroy(use.AnchorRoot.gameObject);

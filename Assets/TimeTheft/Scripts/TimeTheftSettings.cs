@@ -9,7 +9,7 @@ namespace TimeTheft
     {
         [FormerlySerializedAs("InitialLife")]
         [Tooltip("게임 시작 전 총수명 (시간). 실행 모델에서 분 정수로 변환한다.")]
-        [Min(11)] public int InitialLifeHours = 30;
+        [Min(16)] public int InitialLifeHours = 50;
         [Min(1)] public int MinimumHours = 1;
         [Min(1)] public int MaximumHours = 12;
         [Tooltip("비우면 범위 내 균등·중복 허용. 지정하면 최소값부터 각 숫자의 상대 가중치.")]
@@ -58,7 +58,7 @@ namespace TimeTheft
                 throw new ArgumentException("우회선 우회율은 0~100이어야 합니다.");
             if (InitialLifeHours <= TimeTheftMatch.InitialContributionMinutes / GameTime.MinutesPerHour ||
                 InitialLifeHours > int.MaxValue / (2 * GameTime.MinutesPerHour))
-                throw new ArgumentException("시작 총수명은 10h 납부 뒤 수명이 남고 전체 합계가 정수 범위인 값이어야 합니다.");
+                throw new ArgumentException("시작 총수명은 15h 납부 뒤 수명이 남고 전체 합계가 정수 범위인 값이어야 합니다.");
             if (MinimumHours < 1 || MaximumHours < MinimumHours ||
                 MaximumHours > int.MaxValue / (TimeTheftMatch.ClocksPerBatch * GameTime.MinutesPerHour))
                 throw new ArgumentException("시계 숫자 범위를 확인하세요.");

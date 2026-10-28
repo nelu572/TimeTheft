@@ -23,7 +23,7 @@ namespace TimeTheft.Tests
 
         private static Participant Other(Participant actor) => actor == Participant.Player ? Participant.Ai : Participant.Player;
         private static GameRules Rules(Participant first = Participant.Player) => new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0,
-            FirstParticipant = first, InitialLifeHours = 30, MinimumHours = 8, MaximumHours = 8,
+            FirstParticipant = first, InitialLifeHours = 35, MinimumHours = 8, MaximumHours = 8,
             ExtraRedProbability = 0
         };
         private static TimeTheftMatch NewMatch(Participant first, ItemRandom random = null) =>
@@ -274,7 +274,7 @@ namespace TimeTheft.Tests
             Assert.That(match.LastItemEffects.Any(effect => effect.Source.Kind == ItemKind.Scissors), Is.False);
             Assert.That(Balances(match).Sum(), Is.EqualTo(total));
             Assert.That(Balances(match).All(minutes => minutes >= 0), Is.True);
-            Assert.That(match.BankMinutes, Is.EqualTo(1320));
+            Assert.That(match.BankMinutes, Is.EqualTo(1920));
         }
 
         [Test]
@@ -350,7 +350,7 @@ namespace TimeTheft.Tests
             Assert.That(restarted.GetPendingItemEffects(Participant.Player), Is.Empty);
             Assert.That(restarted.LastItemEffects, Is.Empty);
             Assert.That(restarted.LastTransfers, Is.Empty);
-            Assert.That(Balances(restarted), Is.EqualTo(new[] { 1200, 1200, 1200 }));
+            Assert.That(Balances(restarted), Is.EqualTo(new[] { 1200, 1200, 1800 }));
         }
     }
 }

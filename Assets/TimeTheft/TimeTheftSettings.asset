@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: TimeTheftSettings
   m_EditorClassIdentifier: 
   Rules:
-    InitialLifeHours: 30
+    InitialLifeHours: 50
     MinimumHours: 1
     MaximumHours: 12
     NumberWeights: 

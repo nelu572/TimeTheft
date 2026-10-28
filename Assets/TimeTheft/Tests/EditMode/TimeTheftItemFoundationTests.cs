@@ -16,7 +16,7 @@ namespace TimeTheft.Tests
 
         private static TimeTheftMatch NewMatch(Participant first = Participant.Player, int life = 30, int hours = 1)
         {
-            return new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = first, InitialLifeHours = life,
+            return new TimeTheftMatch(new GameRules { EnableAiItemStrategy = false, InitialItemCount = 0, ItemsPerBatch = 0, FirstParticipant = first, InitialLifeHours = life + 5,
                 MinimumHours = hours, MaximumHours = hours, ExtraRedProbability = 0 }, new OrderedRandom());
         }
 
@@ -106,7 +106,7 @@ namespace TimeTheft.Tests
             Assert.That(match.GetPendingItemEffects(actor).Single().Source.Id, Is.EqualTo(third));
             Assert.That(match.UsedCount, Is.Zero);
             Assert.That(match.CurrentClock, Is.EqualTo(-1));
-            Assert.That(new[] { match.PlayerLifeMinutes, match.AiLifeMinutes, match.BankMinutes }, Is.EqualTo(new[] { 1200, 1200, 1200 }));
+            Assert.That(new[] { match.PlayerLifeMinutes, match.AiLifeMinutes, match.BankMinutes }, Is.EqualTo(new[] { 1200, 1200, 1800 }));
             Assert.That(Enumerable.Range(0, 5).All(i => !match.GetClock(i).Face.HasValue), Is.True);
         }
 
