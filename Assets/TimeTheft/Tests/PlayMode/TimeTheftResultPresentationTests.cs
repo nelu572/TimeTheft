@@ -115,6 +115,7 @@ namespace TimeTheft.Tests
             yield return WaitFor(() => presentation.Pressure < .35f);
             Assert.That(match.PlayerLifeMinutes, Is.EqualTo(120 + 18 * GameTime.RationMinutesPerHour));
             Assert.That(presentation.Pressure, Is.LessThan(.35f));
+            Assert.That(presentation.Heartbeat, Is.Zero, "30% 이상 회복하면 박동도 멈춘다");
             Assert.That(EditorJsonUtility.ToJson(original.sharedProfile), Is.EqualTo(baseline));
             Assert.That(bloom.intensity.value, Is.EqualTo(bloomIntensity));
             Assert.That(presentation.PressureVolume.sharedProfile.Has<Bloom>(), Is.False);
@@ -140,6 +141,7 @@ namespace TimeTheft.Tests
             controller.View.BeginTransfer(match); controller.View.NumbersFrame(1);
             yield return new WaitForSecondsRealtime(.2f);
             Assert.That(presentation.DamageReaction, Is.Zero);
+            Assert.That(presentation.Heartbeat, Is.Zero);
             Assert.That(presentation.PressureVolume.weight, Is.Zero);
 
             match.CompleteTurn();
@@ -184,6 +186,65 @@ namespace TimeTheft.Tests
             match.CompleteTurn();
             Settle(match, ClockOfKind(ClockKind.Normal, first, second, third), TimeAction.Collect);
             controller.View.BeginTransfer(match); controller.View.NumbersFrame(1);
+            controller.RestartGame();
+            yield return new WaitForSecondsRealtime(.25f);
+            AssertRestored();
+        }
+
+        [UnityTest]
+        public IEnumerator LowLifeHeartbeatPairsAtEdgesAndYieldsToDamageOrRestart()
+        {
+            settings.Rules.MinimumHours = settings.Rules.MaximumHours = 18;
+            controller.RestartGame();
+            yield return WaitFor(() => controller.Match.Stage == TurnStage.AwaitingClock &&
+                !controller.View.Lifecycle.IsRunning && !controller.View.WorldItems.ModelUses.IsAcquiring);
+            controller.StopAllCoroutines();
+            var match = controller.Match;
+            int first = ClockOfKind(ClockKind.Normal);
+            Settle(match, first, TimeAction.Collect);
+            controller.View.Numbers(match);
+            yield return new WaitForSecondsRealtime(.4f);
+            Assert.That(presentation.Heartbeat, Is.Zero, "상대만 저HP일 때는 박동하지 않는다");
+
+            match.CompleteTurn();
+            Settle(match, ClockOfKind(ClockKind.Normal, first), TimeAction.Collect);
+            controller.View.Numbers(match);
+            yield return new WaitForSecondsRealtime(.5f);
+            presentation.PressureVolume.sharedProfile.TryGet<Vignette>(out var vignette);
+            presentation.PressureVolume.sharedProfile.TryGet<LensDistortion>(out var lens);
+            var beats = new System.Collections.Generic.List<float>();
+            bool inBeat = false;
+            float darkest = 0, lightest = 1, until = Time.unscaledTime + 2.3f;
+            while (Time.unscaledTime < until)
+            {
+                float beat = presentation.Heartbeat;
+                if (beat > .2f && !inBeat) { beats.Add(Time.unscaledTime); inBeat = true; }
+                if (beat < .08f) inBeat = false;
+                darkest = Mathf.Max(darkest, vignette.intensity.value);
+                lightest = Mathf.Min(lightest, vignette.intensity.value);
+                Assert.That(lens.intensity.overrideState || lens.scale.overrideState, Is.False);
+                Assert.That(presentation.DamageReaction, Is.Zero);
+                yield return null;
+            }
+            Assert.That(beats.Count, Is.GreaterThanOrEqualTo(3), "저HP에서 박동이 반복된다");
+            bool pair = false, rest = false;
+            for (int i = 1; i < beats.Count; i++)
+            {
+                float gap = beats[i] - beats[i - 1];
+                pair |= gap < .4f;
+                rest |= gap > .45f;
+            }
+            Assert.That(pair && rest, Is.True, "두 번 두근거린 뒤 쉬는 간격을 둔다");
+            Assert.That(darkest - lightest, Is.GreaterThan(.018f));
+            Assert.That(darkest, Is.LessThan(.35f), "가장자리 맥동을 절제한다");
+
+            presentation.ReactToLifeLoss(60);
+            yield return null;
+            Assert.That(presentation.Heartbeat, Is.Zero, "피격 반응 예약부터 우선한다");
+            yield return WaitFor(() => presentation.DamageReaction > .2f);
+            Assert.That(presentation.Heartbeat, Is.Zero);
+            yield return WaitFor(() => presentation.DamageReaction == 0);
+            yield return WaitFor(() => presentation.Heartbeat > .2f);
             controller.RestartGame();
             yield return new WaitForSecondsRealtime(.25f);
             AssertRestored();
@@ -292,6 +353,7 @@ namespace TimeTheft.Tests
             Assert.That(presentation.IsEnding || presentation.IsVisible, Is.False);
             Assert.That(presentation.Pressure, Is.Zero);
             Assert.That(presentation.DamageReaction, Is.Zero);
+            Assert.That(presentation.Heartbeat, Is.Zero);
             Assert.That(presentation.PressureVolume.weight, Is.Zero);
             if (!controller.enabled) Assert.That(controller.View.FocusCamera.IsPresentationCameraOwned, Is.False);
             for (int i = 0; i < lights.Length; i++)

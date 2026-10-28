@@ -40,6 +40,7 @@ namespace TimeTheft
         private TMP_FontAsset resultFont;
         private int initialLife, shownFrame, armedFrame;
         private float damageStartsAt, damageStrength, shownAt;
+        private float heartbeatPhase, heartbeatStrength;
         private bool initialized, skip, endingComplete, ownsCamera, damageGlowMuted;
         private Action returnToMainMenu;
         private static readonly int GlowId = Shader.PropertyToID("_GlowIntensity");
@@ -49,6 +50,7 @@ namespace TimeTheft
         public bool CanLeaveResult => IsVisible && mainMenuButton && mainMenuButton.interactable && Time.frameCount > armedFrame;
         public float Pressure { get; private set; }
         public float DamageReaction { get; private set; }
+        public float Heartbeat { get; private set; }
         public Volume PressureVolume => pressureVolume;
         public UnityEngine.UI.Button MainMenuButton => mainMenuButton;
         public TMP_Text Heading => heading;
@@ -138,7 +140,28 @@ namespace TimeTheft
             Pressure = Mathf.Lerp(Pressure, target, 1 - Mathf.Exp(-Time.unscaledDeltaTime / .35f));
             if (Mathf.Abs(Pressure - target) < .0001f) Pressure = target;
             UpdateDamageReaction();
-            ApplyEffects(Pressure, 0, DamageReaction);
+            UpdateHeartbeat(ratio);
+            ApplyEffects(Pressure, 0, DamageReaction, Heartbeat);
+        }
+
+        private void UpdateHeartbeat(float ratio)
+        {
+            if (ratio <= 0) { ResetHeartbeat(); return; }
+            float target = ratio < .3f ? Mathf.SmoothStep(0, 1, 1 - ratio / .3f) : 0;
+            heartbeatStrength = Mathf.MoveTowards(heartbeatStrength, target, Time.unscaledDeltaTime / .4f);
+            if (heartbeatStrength <= 0) { ResetHeartbeat(); return; }
+            float period = Mathf.Lerp(1.2f, .75f, heartbeatStrength);
+            heartbeatPhase = Mathf.Repeat(heartbeatPhase + Time.unscaledDeltaTime / period, 1);
+            // 짧은 두 박동 뒤 충분히 쉰다. 피격 반응 중에는 출력만 억제한다.
+            float first = heartbeatPhase < .16f ? Mathf.Sin(Mathf.PI * heartbeatPhase / .16f) : 0;
+            float second = heartbeatPhase >= .22f && heartbeatPhase < .36f
+                ? .65f * Mathf.Sin(Mathf.PI * (heartbeatPhase - .22f) / .14f) : 0;
+            Heartbeat = damageStrength > 0 ? 0 : heartbeatStrength * Mathf.Max(first, second);
+        }
+
+        private void ResetHeartbeat()
+        {
+            heartbeatPhase = heartbeatStrength = Heartbeat = 0;
         }
 
         private static bool InputHeld()
@@ -178,11 +201,11 @@ namespace TimeTheft
             damageGlowMuted = false;
         }
 
-        private void ApplyEffects(float strength, float collapse = 0, float hit = 0)
+        private void ApplyEffects(float strength, float collapse = 0, float hit = 0, float heartbeat = 0)
         {
-            pressureVolume.weight = strength > 0 || collapse > 0 || hit > 0 ? 1 : 0;
+            pressureVolume.weight = strength > 0 || collapse > 0 || hit > 0 || heartbeat > 0 ? 1 : 0;
             chromatic.intensity.value = Mathf.Min(.38f, baseChromatic + .14f * strength + .14f * collapse + .20f * hit);
-            vignette.intensity.value = Mathf.Min(.55f, baseVignette + .16f * strength + .16f * collapse + .08f * hit);
+            vignette.intensity.value = Mathf.Min(.55f, baseVignette + .16f * strength + .16f * collapse + .08f * hit + .06f * heartbeat);
             grading.saturation.value = baseSaturation - 12 * strength - 8 * collapse - 18 * hit;
             grading.colorFilter.value = Color.Lerp(baseFilter, baseFilter * new Color(.9f, .95f, 1, 1), Mathf.Clamp01(strength + .45f * hit));
             distortion.intensity.overrideState = collapse > 0 || hit > 0;
@@ -195,6 +218,7 @@ namespace TimeTheft
         {
             if (!initialized || IsEnding || endingComplete || IsVisible || winner == GameWinner.None) yield break;
             CancelDamageReaction();
+            ResetHeartbeat();
             IsEnding = true; skip = false;
             view.PrepareResultPresentation();
             view.FocusCamera.BeginPresentationCamera(); ownsCamera = true;
@@ -230,6 +254,7 @@ namespace TimeTheft
         {
             if (!initialized || IsVisible) return;
             CancelDamageReaction();
+            ResetHeartbeat();
             IsVisible = true;
             bool won = match.Winner == GameWinner.Player;
             heading.text = won ? "승리" : "패배";
@@ -284,6 +309,7 @@ namespace TimeTheft
             IsEnding = IsVisible = endingComplete = skip = false;
             Pressure = 0;
             CancelDamageReaction();
+            ResetHeartbeat();
             ApplyEffects(0); SetLights(1, 0); RestoreGlow();
             content.gameObject.SetActive(false); content.alpha = 0;
             mainMenuButton.interactable = false; skipButton.gameObject.SetActive(false);
