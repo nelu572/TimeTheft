@@ -35,7 +35,7 @@ namespace TimeTheft
         private GameObject overlay;
         private CanvasGroup content;
         private UnityEngine.UI.Image shade;
-        private UnityEngine.UI.Button mainMenuButton, skipButton;
+        private UnityEngine.UI.Button mainMenuButton;
         private TextMeshProUGUI heading, balance, caption;
         private TMP_FontAsset resultFont;
         private int initialLife, shownFrame, armedFrame;
@@ -284,7 +284,6 @@ namespace TimeTheft
             endingCameraPosition = feedbackCamera.transform.position;
             endingCameraRotation = feedbackCamera.transform.rotation;
             overlay.SetActive(true);
-            skipButton.gameObject.SetActive(true);
             bool won = winner == GameWinner.Player;
             float startPressure = Pressure, elapsed = 0;
             while (elapsed < 2.15f && !skip && IsEnding && isActiveAndEnabled)
@@ -308,7 +307,6 @@ namespace TimeTheft
             RestoreGlow();
             SetLights(won ? .65f : .08f, won ? .14f : 0);
             SetShade(1);
-            skipButton.gameObject.SetActive(false);
         }
 
         public void SkipEnding() { if (IsEnding) skip = true; }
@@ -377,7 +375,7 @@ namespace TimeTheft
             ResetHeartbeat();
             ApplyEffects(0); SetLights(1, 0); RestoreGlow();
             content.gameObject.SetActive(false); content.alpha = 0;
-            mainMenuButton.interactable = false; skipButton.gameObject.SetActive(false);
+            mainMenuButton.interactable = false;
             overlay.SetActive(false);
             if (ownsCamera && view && view.FocusCamera) view.FocusCamera.EndPresentationCamera();
             ownsCamera = false;
@@ -419,9 +417,6 @@ namespace TimeTheft
             balance = Text(panel, "Balance", "", 27, theme.MutedText, new Vector2(0, -70), new Vector2(860, 80));
             mainMenuButton = Button(panel, "Main Menu", "메인으로", new Vector2(0, -192), new Vector2(320, 66), () =>
             { if (CanLeaveResult) { view.FocusCamera.SuppressPointerForCurrentFrame(); returnToMainMenu?.Invoke(); } });
-            skipButton = Button(overlay.transform, "Skip Ending", "연출 단축  [SPACE]", new Vector2(-220, 54), new Vector2(350, 54), () => controller.SkipAnimation());
-            var skipRect = (RectTransform)skipButton.transform;
-            skipRect.anchorMin = skipRect.anchorMax = new Vector2(1, 0);
             content.gameObject.SetActive(false);
             overlay.SetActive(false);
         }
