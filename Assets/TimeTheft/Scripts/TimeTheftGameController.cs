@@ -97,7 +97,7 @@ namespace TimeTheft
             if (!Match.BeginBatch()) yield break;
             view.LockLifecycleInput();
             yield return flowNotice.Show(TimeTheftFlowNotice.BatchName(Match.Batch),
-                Match.Batch == 1 ? "게임을 시작합니다 · 숫자와 종류를 기억하세요" : "새 시계의 숫자와 종류를 기억하세요", 1.15f);
+                Match.Batch == 1 ? "게임을 시작합니다 · 숫자와 종류를 기억하세요" : "새 시계의 숫자와 종류를 기억하세요", settings.BatchNoticeDuration);
             view.ShowBatch(Match);
             var lifecycle = view.Lifecycle;
             if (lifecycle && lifecycle.CanPlay(view))
@@ -289,7 +289,7 @@ namespace TimeTheft
             if (announcedTurn != Match.Turn)
             {
                 announcedTurn = Match.Turn;
-                yield return flowNotice.Show(Match.ActiveParticipant == Participant.Player ? "당신의 차례" : "상대의 차례", "", .7f);
+                yield return flowNotice.Show(Match.ActiveParticipant == Participant.Player ? "당신의 차례" : "상대의 차례", "", settings.TurnNoticeDuration);
             }
             openingTurn = false;
             var turnMotion = view.TurnPresentation;
@@ -345,7 +345,7 @@ namespace TimeTheft
                 : TimeTheftAi.Decide(actionInfo.PublicGame, actionInfo.Strategy.RiskTolerance, aiRandom);
             if (!Match.CommitAction(Participant.Ai, action)) yield break;
             view.ShowOpponentCommittedAction(Match);
-            yield return flowNotice.Show(action == TimeAction.Collect ? "징수" : "배급", "상대가 행동을 선택했습니다", 1.15f);
+            yield return flowNotice.Show(action == TimeAction.Collect ? "징수" : "배급", "상대가 행동을 선택했습니다", settings.AiActionNoticeDuration);
             yield return Resolve();
         }
 

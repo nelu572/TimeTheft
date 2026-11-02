@@ -123,11 +123,15 @@ namespace TimeTheft
         [Tooltip("새 묶음의 숫자·종류를 자동으로 보여 주는 관찰 시간")]
         [Min(.05f)] public float PreviewDuration = 5.5f;
         [Min(.05f)] public float ShuffleDuration = 1.1f;
-        [Min(.05f)] public float AiThinkDuration = .8f;
-        [Min(.05f)] public float RevealDuration = 1.2f;
-        [Min(.05f)] public float TransferDuration = 1f;
-        [Min(.05f)] public float ResultHoldDuration = 1.4f;
+        [Min(.05f)] public float AiThinkDuration = .45f;
+        [Min(.05f)] public float RevealDuration = .55f;
+        [Min(.05f)] public float TransferDuration = .85f;
+        [Min(.05f)] public float ResultHoldDuration = .45f;
         [Min(.05f)] public float DiscardDuration = .65f;
+        [Header("진행 안내 시간 (초) · 페이드 시간 제외")]
+        [Min(.05f)] public float BatchNoticeDuration = .8f;
+        [Min(.05f)] public float TurnNoticeDuration = .35f;
+        [Min(.05f)] public float AiActionNoticeDuration = .7f;
         [Tooltip("0: 새 난수, 그 외: 재현용 시드")]
         public int RandomSeed;
     }

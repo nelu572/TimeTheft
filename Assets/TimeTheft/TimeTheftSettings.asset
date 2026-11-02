@@ -32,9 +32,12 @@ MonoBehaviour:
     ItemWeights: 
   PreviewDuration: 4
   ShuffleDuration: 1.1
-  AiThinkDuration: 0.8
-  RevealDuration: 1.2
-  TransferDuration: 1
-  ResultHoldDuration: 1.4
+  AiThinkDuration: 0.45
+  RevealDuration: 0.55
+  TransferDuration: 0.85
+  ResultHoldDuration: 0.45
   DiscardDuration: 0.65
+  BatchNoticeDuration: 0.8
+  TurnNoticeDuration: 0.35
+  AiActionNoticeDuration: 0.7
   RandomSeed: 0
