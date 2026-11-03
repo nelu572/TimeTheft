@@ -46,7 +46,7 @@ namespace TimeTheft
         public void SampleBatchClip(AnimationClip clip, float progress)
         {
             var scale = MotionRoot.localScale;
-            clip.SampleAnimation(watch.gameObject, Mathf.Clamp01(progress) * clip.length);
+            H2AnimationSampling.Sample(clip, watch.gameObject, Mathf.Clamp01(progress) * clip.length);
             MotionRoot.localScale = scale;
             IsOpen = Quaternion.Angle(Quaternion.identity, watch.LidPivot.localRotation) >= 85;
             if (extendedHoursLabel) extendedHoursLabel.enabled = IsOpen && DisplayedHours > 12;

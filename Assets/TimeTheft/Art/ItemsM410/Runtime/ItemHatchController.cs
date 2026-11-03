@@ -84,6 +84,8 @@ namespace TimeTheft.ItemPresentation
             {
                 if (value == null || !value.Root || !value.Model || !value.Clip || value.Aperture.x <= 0 || value.Aperture.y <= 0)
                 { LastError = "해치 모델·클립·개구부 연결을 확인하세요."; return; }
+                // Player의 직접 샘플링에 필요하며 자동 상태 재생은 하지 않는다.
+                if (!value.Model.GetComponent<Animator>()) value.Model.AddComponent<Animator>().enabled = false;
                 value.Pose = new ItemPoseSnapshot(value.Model);
                 value.InitialPosition = value.Root.transform.localPosition; value.InitialRotation = value.Root.transform.localRotation; value.InitialScale = value.Root.transform.localScale;
                 if (!value.Floor)

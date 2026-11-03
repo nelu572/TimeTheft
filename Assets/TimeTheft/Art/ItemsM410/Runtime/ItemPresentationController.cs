@@ -46,6 +46,8 @@ namespace TimeTheft.ItemPresentation
         public void Initialize()
         {
             if (pose != null || Visual == null || AnimationModel == null || Profile == null) return;
+            // Player에서도 non-Legacy 클립을 직접 샘플링할 수 있게 한다.
+            if (!AnimationModel.GetComponent<Animator>()) AnimationModel.AddComponent<Animator>().enabled = false;
             pose = new ItemPoseSnapshot(Visual);
             motionRoot = AnimationModel.transform.Find(Profile.RootPath);
             contact = string.IsNullOrEmpty(Profile.ContactPath) ? null : AnimationModel.transform.Find(Profile.ContactPath);
