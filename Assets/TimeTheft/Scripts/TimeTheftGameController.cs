@@ -17,6 +17,7 @@ namespace TimeTheft
         private bool skipRequested;
         private bool selectingClock;
         private bool openingTurn;
+        private float escapeHeldSeconds;
         private int announcedTurn;
         private TimeTheftFlowNotice flowNotice;
         public bool IsFlowBlocked => openingTurn || flowNotice && flowNotice.IsVisible;
@@ -45,6 +46,12 @@ namespace TimeTheft
         {
             var keyboard = Keyboard.current;
             if (keyboard == null || !view) return;
+            escapeHeldSeconds = keyboard.escapeKey.isPressed ? escapeHeldSeconds + Time.unscaledDeltaTime : 0f;
+            if (escapeHeldSeconds >= 1.5f)
+            {
+                SceneManager.LoadScene("Assets/TimeTheft/TitleScreen/Scenes/TimeTheftTitle.unity", LoadSceneMode.Single);
+                return;
+            }
             if (keyboard.hKey.wasPressedThisFrame) view.ToggleHelp();
             if (keyboard.spaceKey.wasPressedThisFrame) SkipAnimation();
             if (IsFlowBlocked || IsPresentingItem || selectingClock) return;
