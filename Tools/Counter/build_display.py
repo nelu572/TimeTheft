@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 PROJECT = Path(__file__).resolve().parents[2]
-ROOT = PROJECT / 'Assets/TimeTheft/Counter'
+ROOT = PROJECT / 'Assets/Art/Props/Counter'
 CHARS = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:-'
 
 
@@ -60,13 +60,13 @@ def save_font(spec):
         image.alpha_composite(source['image'],(x,y))
         glyphs.append({'unicode':code,'x':x,'y':128-y-source['height'],'width':source['width'],'height':source['height'],
                        'bearingX':source['bearingX'],'bearingY':source['bearingY'],'advance':source['advance']})
-    image.save(ROOT/'Fonts'/f'{spec["name"]}_Glyphs.png')
+    image.save(PROJECT/'Assets/Fonts/Counter'/f'{spec["name"]}_Glyphs.png')
     data={key:value for key,value in spec.items() if key!='glyphs'};data['glyphs']=glyphs
-    (ROOT/'Fonts'/f'{spec["name"]}.json').write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+    (PROJECT/'Assets/Fonts/Counter'/f'{spec["name"]}.json').write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
 
 
 def main():
-    (ROOT/'Fonts').mkdir(exist_ok=True)
+    (PROJECT/'Assets/Fonts/Counter').mkdir(exist_ok=True)
     for spec in (bdf(ROOT/'Source/Galmuri/Galmuri7.bdf', 'Galmuri7Native', 8), segmented()):
         save_font(spec)
 

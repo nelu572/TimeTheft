@@ -15,7 +15,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 PROJECT = Path(__file__).resolve().parents[2]
-ROOT = PROJECT / 'Assets/TimeTheft/Counter'
+ROOT = PROJECT / 'Assets/Art/Props/Counter'
 UV = ROOT / 'Source/UV'
 
 

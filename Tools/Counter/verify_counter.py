@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image
 
 PROJECT = Path(__file__).resolve().parents[2]
-ROOT = PROJECT / 'Assets/TimeTheft/Counter'
+ROOT = PROJECT / 'Assets/Art/Props/Counter'
 TUBES = ('MainCurvedConduit', 'AuxiliaryCurvedConduit', '07_UnterminatedCableRoute')
 
 
