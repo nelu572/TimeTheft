@@ -1,31 +1,18 @@
 # TimeTheft
 
-Unity 6 (`6000.0.68f1`)로 만드는 1인 게임잼 프로젝트.
+Unity 6 (`6000.0.68f1`)로 개발을 이어가는 1인 게임 프로젝트다.
 
-- 시작 씬: `Assets/Scenes/TimeTheftTitle.unity`
-- 메인 게임: `Assets/Scenes/TimeTheftGame.unity`
-- 개발·검증 씬: `Assets/Scenes/_Development/`
-- 작업 지침: [AGENTS.md](AGENTS.md) · [Unity](.docs/harness/UNITY.md) · [Git/Worktree](.docs/harness/GITHUB.md)
-- 기획 원문: [Notion 안내](.docs/project/GAME_DESIGN.md) · 구현·검증 기록: [HANDOFF](.docs/project/HANDOFF.md)
+- 플레이 진입점은 [TimeTheftTitle](Assets/Scenes/TimeTheftTitle.unity) → [TimeTheftGame](Assets/Scenes/TimeTheftGame.unity)이다.
+- Study·Validation 씬은 [Assets/Scenes/_Development](Assets/Scenes/_Development)에 있다.
+- 개발 지침은 [AGENTS.md](AGENTS.md), [Unity 하네스](.docs/harness/UNITY.md), [Git 하네스](.docs/harness/GITHUB.md)를 참고한다.
+- [HANDOFF](.docs/project/HANDOFF.md)에서 현재 구현과 검증 이력을, [기획서 안내](.docs/project/GAME_DESIGN.md)에서 Notion 원문을 찾을 수 있다.
 
 ```text
-.agents/skills/commit/
-.docs/{harness,project}/
-.vscode/
 Assets/
-  Animations/
-  Art/{Characters,Props,UI,Rendering}/
-  Fonts/
-  Input/
-  Prefabs/
-  Scenes/_Development/
-  Scripts/{Core,Gameplay,Presentation,Camera,UI,Editor,Development}/
-  Settings/
-  Tests/{EditMode,PlayMode}/
-  TextMesh Pro/
-Packages/
-ProjectSettings/
-Tools/
+  Animations/  Art/  Fonts/  Input/  Prefabs/
+  Scenes/      Scripts/      Settings/  Tests/  TextMesh Pro/
+Packages/     ProjectSettings/     Tools/
+.docs/        .agents/            .vscode/
 ```
 
-`TextMesh Pro`는 공급 라이브러리 구조와 Resources 경로를 보존한다. 제작 중 원본·이전 모델과 검증 자료는 사용 여부가 불확실하면 해당 오브젝트 아래에 보존한다.
+게임잼 제출 빌드와 선별 제작 원본은 `C:/unity/TimeTheft-Archive`의 `Submission_20261028`과 `LegacySources_20261029`에 각각 보관되어 있다.

@@ -1,5 +1,37 @@
 # TimeTheft 개발 인수인계
 
+## 현재 개발 상태 — 2026-11-16
+
+### 프로젝트 구조와 구현
+
+- 기본 개발 브랜치는 `main`이다. 11월 3일 구조 개편(`79748cda`) 이후 소스는 [Assets/Scripts](../../Assets/Scripts)에, 아트·애니메이션·Prefab·설정은 [Assets](../../Assets)의 기능별 폴더에 배치한다. [타이틀](../../Assets/Scenes/TimeTheftTitle.unity)에서 [메인 게임](../../Assets/Scenes/TimeTheftGame.unity)으로 진입하며 [개발 씬](../../Assets/Scenes/_Development)은 별도 폴더에 있다.
+- 게임 로직에는 시계 선택, 징수·배급과 정산, 턴 진행, 6종 아이템 효과·자동 지급 및 AI 전략이 연결돼 있다. 현재 플레이는 메인 씬의 3D 입력과 UI를 통해 제공된다. 로직과 화면 연결의 위치는 [Unity 하네스](../harness/UNITY.md#현재-기술-구조)를 참고한다.
+
+### 개발 방향
+
+- 11월 16일 [Notion 기획서 안내](GAME_DESIGN.md) 기준으로 기존 핵심 게임 로직을 우선 유지하면서 2D 픽셀 기반 화면·조작·연출 개편을 검토한다. 전환 여부와 구현 방식, 화면 구성·아트의 세부 사항은 미확정이다. 기존 3D 플레이와 제작 원본은 비교·복구 기준으로 보존한다.
+
+### 마지막 검증과 알려진 문제
+
+- 11월 3일 구조 개편 Worktree에서 EditMode 341/374, PlayMode 73/149가 통과했다. 이동 전후 공통 실패는 각각 33개와 74개였다. 결과가 달랐던 카메라 검사 3개는 재실행에서 양쪽 모두 통과했다. 같은 날 타이틀 → 게임 → 패배 → 타이틀의 자동 흐름과 Windows 개발용 Player 빌드·기동을 확인했다.
+- 기록된 문제는 진행·포인터 검사, 기존 수치·문구 기대값, 제거된 `FocusedLighting` Editor 타입을 조회하는 검사, Counter Study 대상 참조 6개와 URP Renderer APV 리소스 참조 14개다. 당시 메인·타이틀·Prefab의 직접 누락 참조는 0개였다. 11월 16일에는 해당 검사와 Editor 상태를 다시 확인하지 않았다.
+
+### 다음 작업 시 주의 사항
+
+- 승인된 표현 변경은 기존 로직·설정과 씬·아트 원본에 미치는 영향을 확인하고 진행한다. 11월 3일 실패는 영향받는 기능을 검증할 때 비교 기준으로 사용한다. 검증 근거는 `.utmp/final-validation/`과 `.utmp/integration/`에 남아 있다.
+- 기존 미커밋 폰트·설정·타이틀 Volume Profile을 작업 산출물과 구분해 보존한다. [Unity 하네스](../harness/UNITY.md)와 [Git 하네스](../harness/GITHUB.md)를 참고한다.
+
+---
+
+## 개발 이력
+
+아래 기록의 파일 위치, Editor 상태와 검증 수치는 각 작업 시점을 기준으로 한다.
+
+### 2026-11-16 폴더 및 Git 정리
+
+- 게임잼 제출 ZIP, 별도 Player와 Burst 디버그 사본은 `C:/unity/TimeTheft-Archive/Submission_20261028`로 옮겼다. 제작 원본 ZIP과 인덱스는 `C:/unity/TimeTheft-Archive/LegacySources_20261029`로 옮겼다. 기존 11월 2일 실험 아카이브와 복원 도구는 `C:/unity/TimeTheft-Archive/2026-11-02-cleanup`에 있다.
+- 11월 3일 기록에 남은 미등록 `folder-restructure` 빈 디렉터리는 제거했다. 로컬 전용 브랜치 5개·Stash 1개·`b0-tempo` Worktree는 보존했다. `b0-tempo`의 파일 113개를 짧은 임시 경로에 복원해 현재 변경 목록과 대조했다.
+
 ## 병합 전 최종 검증 — 2026-11-03
 
 구조 자체는 사용자 승인 상태다. 동일한 main 커밋 `94dd1e2`를 새 임시 Worktree에서 열어 기존 사용자 TimeManager·타이틀 Volume Profile 사본을 동일하게 적용했다. 원본 main과 기존 다른 Worktree의 파일·Editor에는 변경을 전달하지 않았다. 아래 결과가 이전 구조 개편 검증의 미확인 사항을 보완한다.
@@ -16,7 +48,7 @@
 - main의 CounterStructureStudy `TabletopDecisionObject.target` 6개와 PC/LoFi Renderer APV 디버그 리소스 14개를 Unity에서 직접 검사했다. **20개 모두 개편 Worktree와 동일**하며 새 참조 누락은 없다. 기존 오류는 수정하지 않았다.
 - 기존 GUID 787개, asmdef 7개, C# namespace 150개, Resources 내부 경로 10개를 main과 대응시켜 비교했고 문제는 없었다. 빌드 씬의 GUID와 타이틀 → 게임 순서를 유지하며 실제 새 경로 로드를 확인했다.
 - 별도 핵심 흐름 검사는 **타이틀 → 게임 → 자연스러운 패배 결과 → 타이틀, 1/1 통과**했다. 원본 설정을 복제·덮어쓰지 않았고 시계 선선택과 메뉴/행동 버튼의 연결된 콜백, 정상 연출 단축 API를 사용했다. 90.3초 동안 3묶음·12턴·플레이어 행동 6회를 거쳤고 설정 JSON도 그대로였다. 포인터 Raycast를 이용한 수동 플레이 검증은 아니다. 임시 검증 코드는 검사 뒤 제거했다.
-- **Windows 64비트 Mono Development Build 성공**: 오류 0, 경고 0, 138.4초, 253.42MB. 두 실제 씬만 빌드했다. 생성된 Player를 D3D11 그래픽이 켜진 batchmode에서 101.8초 실행해 어셈블리·GPU 초기화와 프로세스 응답, 런타임 오류 0개를 확인한 뒤 종료했다. 독립 Player에서 전체 게임을 직접 플레이한 검증은 아니다. 실행 파일은 `.utmp/final-validation/windows-development/TimeTheft.exe`에 있다.
+- **Windows 64비트 Mono Development Build 성공**: 오류 0, 경고 0, 138.4초, 253.42MB. 두 실제 씬만 빌드했다. 생성된 Player를 D3D11 그래픽이 켜진 batchmode에서 101.8초 실행해 어셈블리·GPU 초기화와 프로세스 응답, 런타임 오류 0개를 확인한 뒤 종료했다. 독립 Player에서 전체 게임을 직접 플레이한 검증은 아니다. 당시 실행 파일은 `.utmp/final-validation/windows-development/TimeTheft.exe`에 생성했으며 검증 뒤 정리했다.
 - 검증 때문에 생긴 폰트 캐시·Editor 설정·Input System의 preloaded asset 등록·Graphics 설정 재직렬화, URP 셰이더 전처리/runtime settings 목록과 동적 폰트 자동 초기화를 검증 전 사본·이동 전 해시·원본 대조로 복구했다. 임시 main Editor와 Worktree, 검증 Player는 정리했다. 기존 사용자 변경은 유지했으며 게임 로직·기획·연출 수정과 커밋·Push·Merge는 수행하지 않았다.
 - **구조 개편 범위에서는 병합 가능**하다. 기존 규칙/문구 기대값 불일치·진행/포인터 검사 실패·없어진 FocusedLighting Editor 타입 의존과 참조 누락 20개는 별도 후속 문제로 남는다. 전체 검사가 녹색이거나 모든 게임 문제가 해결됐다는 판정은 아니다. 항목별 실패·스킵·미실행과 비교 근거 JSON은 `.utmp/final-validation/`에 보존했다.
 
@@ -37,7 +69,7 @@
 
 아이템 공통 기반·6종 실제 효과·자동 지급/보유·기대값 기반 AI 사용/보존/조합 전략을 연결했다. 검증 정책과 자동 테스트 결과는 6절을 따른다. 이번 요청에 따라 수동 플레이는 수행하지 않고 별도 통합 검증으로 남긴다. 지급 수치와 보유 종류 공개는 기존 잠정 정책을 유지했으며, 6종 효과·조건·정산 순서는 변경하지 않았다.
 
-## 1. 지금 열어야 할 씬
+## 1. 씬과 설정 (2026-10-26 기준)
 
 **`Assets/Scenes/TimeTheftGame.unity`가 유일한 현행 개발 씬이다.** 개별 기능은 자동 테스트를 우선한다. 기본 Build Profiles 공유 씬 목록에는 이 씬 하나만 활성으로 남긴다. 별도 활성 Build Profile은 없다. `TabletopGame`·`SampleScene`과 구형 게임 진행·테스트는 제거했다.
 
@@ -64,7 +96,7 @@
 
 메인의 Legacy 직렬화 의존성은 정리 전부터 0이었다. Study에 남은 표시 코드 때문에 현행 규칙에 예외나 호환 분기를 추가하지 않았다. Legacy 게임 원본은 Git 이력에 남으며 복구·실행을 기본 검증에 포함하지 않는다.
 
-## 3. 현행 코드와 책임
+## 3. 당시 코드와 책임 (2026-10-26 기준)
 
 | 파일·클래스 | 책임 |
 | --- | --- |
@@ -153,9 +185,9 @@
 
 루트 README나 별도 시스템/작업 로그 문서는 새로 만들지 않았다. 추가 자동화·관리 체계·스킬 변경도 없다.
 
-## 6. 검증 정책과 최신 결과 (2026-10-25)
+## 6. 검증 정책과 결과 (2026-10-25 기준)
 
-정책의 기준은 `AGENTS.md`의 “자동 테스트와 검증 정책”이다. 기존 하네스는 Unity Test Framework의 `TimeTheft.EditModeTests`·`TimeTheft.PlayModeTests`와 MCP Test Runner이며 별도 CI/실행 스크립트는 없었다. 두 어셈블리와 계수기 제작/검증 도구는 유지했다. 새 프레임워크는 추가하지 않았다.
+이 절의 검증은 당시 `AGENTS.md`의 “자동 테스트와 검증 정책”을 따랐다. 현재 정책은 [Unity 하네스](../harness/UNITY.md#변경-범위에-따른-검증)에 있다. 기존 하네스는 Unity Test Framework의 `TimeTheft.EditModeTests`·`TimeTheft.PlayModeTests`와 MCP Test Runner이며 별도 CI/실행 스크립트는 없었다. 두 어셈블리와 계수기 제작/검증 도구는 유지했다. 새 프레임워크는 추가하지 않았다.
 
 - 개별 기능은 관련 EditMode 우선, 필요한 PlayMode와 회귀 검사를 선택한다. 실제 메인 씬을 사용하는 자동 포인터/키 검사는 수동 플레이와 구분한다.
 - 통합 마일스톤에는 관련 자동 검사 전체와 실제 메인 씬의 자동 통합 검사를 실행한다. 수동 플레이는 6종 아이템·기본 지급·AI 통합 뒤 집중한다. 별도 요청 또는 자동 검증으로 확인할 수 없는 중요 문제만 원인·범위를 먼저 보고한 뒤 예외로 다룬다.
@@ -273,7 +305,7 @@ EditMode 90개는 현행 규칙 45·드라이버 24·아이템 기반 16·메인
 - 테스트에서 증가한 NanumGothic 캐시만 시작 사본으로 복원·재임포트했다. 기존 사용자 폰트 변경을 HEAD로 되돌리지 않았다. 메인/Study 씬·Prefab·시계/테이블/계수기·카메라·View·6종 효과 partial·지급 partial·프로젝트 설정·패키지를 보존했다. 실제 정산은 동일한 계산을 공유 함수로 옮긴 것이며 기존 전용 규칙 회귀를 통과했다.
 - 결과는 무시 경로 `Temp/AiStrategyValidation/`의 `EditMode-282.json`, `PlayMode-49.json`, `Simulation-128.json`과 초기 실패/단독 재실행 JSON에 남겼다. 수동 플레이·독립 Player 빌드·최종 모델/애니메이션·Notion 수정·Legacy 복구·커밋/Push는 수행하지 않았다. 후속 통합에서는 사람의 다양한 위험 선호·미사용/블러핑과의 대전, 선공/수갑 연속 행동, 보험 소모의 가독성, 여러 화면비와 실제 입력 환경을 확인한다.
 
-## 7. 다음 작업과 최종 모델 연결
+## 7. 당시 후속 작업과 최종 모델 연결 (2026-10-26 기준)
 
 1. **AI 후속 통합 검증:** 6종 규칙·임시 지급/보유·기본 아이템 전략을 구현했다. 다음에는 실제 사람 상대 플레이에서 성격/보존/연출 가독성과 선공·수갑·보험 아이템 사용 빈도를 확인한다. 이번 요청에서는 자동 검증까지만 수행했으므로 수동 플레이는 별도 범위로 남긴다. 숨은 시계/상대 비공개 효과/Match 참조를 AI에 추가하지 않는다. 규칙 변경은 Notion과 대조한다.
 2. **회중시계 제작 완료 후 통합:** 새 `ClockToken.prefab` 또는 그 대체 Prefab의 `Visual` 아래에 완성 모델을 넣고 `ClockTokenView`의 Face/Lid/Dial/Number/Kind 표시 참조와 SelectionTarget을 연결한다. 루트 Collider·클릭 전용 FocusTarget 및 물리 위치 ID를 유지한다. 현 컴포넌트는 SpriteRenderer 문자판 색을 쓰므로 3D 문자판 재질을 쓸 때는 이 표시 코드만 조정한다. `Show(ClockState)`의 공개 경계와 `TimeTheftGameView.clocks` 5개 계약을 유지한다. Match나 턴 로직을 모델에 넣지 않는다.
