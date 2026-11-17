@@ -32,6 +32,15 @@
 - 게임잼 제출 ZIP, 별도 Player와 Burst 디버그 사본은 `C:/unity/TimeTheft-Archive/Submission_20261028`로 옮겼다. 제작 원본 ZIP과 인덱스는 `C:/unity/TimeTheft-Archive/LegacySources_20261029`로 옮겼다. 기존 11월 2일 실험 아카이브와 복원 도구는 `C:/unity/TimeTheft-Archive/2026-11-02-cleanup`에 있다.
 - 11월 3일 기록에 남은 미등록 `folder-restructure` 빈 디렉터리는 제거했다. 로컬 전용 브랜치 5개·Stash 1개·`b0-tempo` Worktree는 보존했다. `b0-tempo`의 파일 113개를 짧은 임시 경로에 복원해 현재 변경 목록과 대조했다.
 
+## 통합 후 프로젝트 정리 — 2026-11-03
+
+- 기준은 `main`의 `79748cda`다. `feature/folder-restructure`와 해당 Worktree 등록·전체 파일을 제거했다. Worktree의 TimeManager·TitleVolume 4개는 main과 SHA-256이 같음을 확인해 main 사본을 보존했다. Editor 종료 때 새로 저장된 폰트 캐시만 시작 상태로 복구한 뒤 제거했다. Windows 긴 경로로 Git 삭제가 중단되어 잔여 파일은 확인된 동일 경로에서 PowerShell로 정리했다. **빈 `C:/Users/user/.codex/worktrees/folder-restructure/TimeTheft` 폴더와 부모 폴더는 프로세스 잠금으로 남아 있다.** 잠금 해제 후 빈 폴더 삭제가 필요하다.
+- 완료된 임시 Player·Library·중간 산출물·Editor 로그, 루트의 폐기된 어셈블리용 자동 생성 csproj 12개와 빈 Builds를 제거했다. 기존 검증 JSON은 main의 `.utmp/final-validation/`, `.utmp/integration/`에 보존했다. 아래 역사적 기록의 임시 Player 실행 파일은 삭제됐다. 확보량은 보존 자료를 뺀 파일 크기 합계 약 **2.49 GiB**이며 실제 볼륨 여유 공간 증감 측정값은 아니다. main의 Library·현재 로그/Temp와 용도가 불명확한 TableZoneReference 이미지는 보존했다.
+- `b0-tempo`는 detached HEAD의 코드 변경 3개·미추적 테스트/검증 자료 때문에 보존했다. main에 없는 커밋이 있는 `feature/item-assets-m410`, `feature/opponent-mask`, `feature/result-presentation`, `feature/title-screen`, `feature/visual-style` 및 기존 Stash 1개도 보존했다. main의 기존 TimeManager 수정·미추적 TitleVolume 3개와 모든 추적 폰트/에셋은 유지했다. 커밋·Push·원격 변경은 없다.
+- Unity MCP로 씬 6개·Prefab 24개·asset 124개를 읽기 전용 검사했다. Missing Script 0개, 타이틀/게임/Prefab의 직접 누락 참조 0개다. 기존 20개는 동일하다: 비활성 CounterStructureStudy Keep/Swap의 target 6개는 대응 FocusTarget이 없어 임의 연결하지 않았다. PC/LoFi Renderer의 APV 리소스 14개는 설치 패키지에 없는 구형 GUID를 참조한다. Renderer는 게임 의존성이지만 현재 Pipeline의 APV는 비활성이다. 렌더링 설정을 변경하지 않고 후속 판단 대상으로 보존했다. Assets meta 827개 GUID 중복 0개, 타이틀 → 게임 Build 순서 유지다.
+- 기존 실패 기록만 분류했고 테스트는 재실행하지 않았다. EditMode 33개는 수명 설정 제약 예외 17개·수치/기대값 불일치 16개다. PlayMode 공통 74개는 진행/포인터 검사 29개·수치/문구/표현 기대값 35개·수명 제약 4개·초기화/상태 예외 4개·제거된 FocusedLighting Editor 타입 의존 2개다. 메시지 기준 분류이며 제품 버그 여부의 확정 판정은 아니다. 진행/입력 문제는 후속 확인 우선도가 높고, 구형 검사 의존과 비활성 Study/APV는 현재 플레이 영향이 낮다.
+- 종료 시 main은 기존 사용자 변경 4개에 이 문서 수정만 추가됐다. Unity의 컴파일 실패 상태 false·컴파일 중 아님·Console 오류 0, 기존 타이틀 씬 미저장 변경 없음·Play 꺼짐이다. 기능·기획·밸런스·연출 및 씬/Prefab 직렬화는 변경하지 않았다.
+
 ## 병합 전 최종 검증 — 2026-11-03
 
 구조 자체는 사용자 승인 상태다. 동일한 main 커밋 `94dd1e2`를 새 임시 Worktree에서 열어 기존 사용자 TimeManager·타이틀 Volume Profile 사본을 동일하게 적용했다. 원본 main과 기존 다른 Worktree의 파일·Editor에는 변경을 전달하지 않았다. 아래 결과가 이전 구조 개편 검증의 미확인 사항을 보완한다.
